@@ -1,0 +1,67 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Office temporary files
+~$*.docx
+~$*.pptx
+~$*.xlsx
+*.tmp
+*.temp
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+*.local
+
+# Logs
+*.log
+logs/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.vite/
+.next/
+.nuxt/
+coverage/
+
+# Java / Spring Boot
+/target/
+*.class
+*.jar
+*.war
+*.ear
+.gradle/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Docker / database local data
+*.pid
+*.seed
+*.sqlite
+*.sqlite3
+postgres-data/
+mysql-data/
+redis-data/
+
+# Test / reports generated locally
+playwright-report/
+test-results/
+allure-results/
+
+# Claude/session transient files
+.claude/settings.local.json
+.claude/worktrees/
