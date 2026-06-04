@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: nekocafe-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+
+  mysql-local:
+    image: mysql:8.0
+    container_name: nekocafe-mysql-local
+    profiles: ["local-mysql"]
+    environment:
+      MYSQL_DATABASE: nekocafe
+      MYSQL_USER: nekocafe_app
+      MYSQL_PASSWORD: change_me
+      MYSQL_ROOT_PASSWORD: change_root_me
+      TZ: Asia/Shanghai
+    ports:
+      - "3306:3306"
+    command: >
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_general_ci
+      --default-time-zone=+08:00
+    volumes:
+      - mysql-local-data:/var/lib/mysql
+
+volumes:
+  redis-data:
+  mysql-local-data:

@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build backend
+        run: cd NekoCafe/backend && mvn -B -DskipTests package
+      - name: Install frontend dependencies
+        run: cd NekoCafe/frontend && npm install
+      - name: Build frontend
+        run: cd NekoCafe/frontend && npm run build

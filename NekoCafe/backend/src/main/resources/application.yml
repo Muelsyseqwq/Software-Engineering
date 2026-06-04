@@ -1,0 +1,27 @@
+spring:
+  profiles:
+    active: ${NEKO_PROFILE:dev}
+  application:
+    name: nekocafe-backend
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+nekocafe:
+  jwt:
+    secret: ${JWT_SECRET:change_me_to_at_least_32_chars}
+    expires-minutes: ${JWT_EXPIRES_MINUTES:120}
