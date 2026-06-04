@@ -22,8 +22,33 @@
         <div class="cat-ear right" />
         <div class="card-heading">
           <span class="eyebrow">Sign in with paws</span>
-          <h2>登录 NekoCafé</h2>
-          <p>输入用户名、手机号或邮箱，开启今日猫咖预约。</p>
+          <h2>按角色进入 NekoCafé</h2>
+          <p>先挑一块猫咖值班牌，再用账号密码进入真实权限对应的工作台。</p>
+        </div>
+
+        <div class="role-dock" aria-label="选择登录角色入口">
+          <button
+            v-for="role in roleOptions"
+            :key="role.code"
+            class="role-card"
+            :class="{ 'is-active': selectedRole === role.code }"
+            type="button"
+            @click="selectRole(role.code)"
+          >
+            <span class="role-mark">{{ role.badge }}</span>
+            <strong>{{ role.name }}</strong>
+            <small>{{ role.code }} · {{ role.homePath }}</small>
+            <span>{{ role.description }}</span>
+            <em>{{ role.demoAccount }}</em>
+          </button>
+        </div>
+
+        <div class="demo-helper">
+          <div>
+            <strong>{{ selectedRoleInfo.name }}演示入口</strong>
+            <span>{{ selectedRoleInfo.capability }}，账号 {{ selectedRoleInfo.demoAccount }}</span>
+          </div>
+          <el-button size="small" round @click="fillDemoAccount">填入账号</el-button>
         </div>
 
         <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="auth-form" @keyup.enter="submit">
@@ -56,12 +81,13 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { loginApi } from '@/api/auth'
 import { useAuthStore } from '@/stores/auth'
-import { getDefaultHomeByRoles } from '@/router/permissions'
+import { ROLE_HOME_MAP, canAccessRoute, getDefaultHomeByRoles } from '@/router/permissions'
+import type { RoleCode } from '@/types/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,6 +95,28 @@ const auth = useAuthStore()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 const rememberMe = ref(true)
+const selectedRole = ref<RoleCode>('CUSTOMER')
+
+interface LoginRoleOption {
+  code: RoleCode
+  name: string
+  badge: string
+  description: string
+  capability: string
+  demoAccount: string
+  homePath: string
+}
+
+const roleOptions: LoginRoleOption[] = [
+  { code: 'CUSTOMER', name: '猫爪会员', badge: '🐾', description: '预约猫咪互动座位', capability: '浏览门店、预约座位、点单结算', demoAccount: 'demo_customer', homePath: '/stores' },
+  { code: 'STAFF', name: '前台铃铛', badge: '🛎️', description: '处理签到与订单履约', capability: '查看今日预约、办理签到、推进订单', demoAccount: 'demo_staff', homePath: '/staff' },
+  { code: 'CAT_CARETAKER', name: '猫咪健康簿', badge: '🐈', description: '维护猫咪档案', capability: '维护猫咪档案与健康状态', demoAccount: 'demo_cat', homePath: '/cats' },
+  { code: 'STORE_MANAGER', name: '门店掌柜', badge: '🏠', description: '管理门店运营', capability: '查看桌位、门店状态和本店预约', demoAccount: 'demo_manager', homePath: '/manager' },
+  { code: 'HQ_OPERATOR', name: '咖啡罗盘', badge: '🧭', description: '查看经营数据', capability: '查看平台经营数据和跨店看板', demoAccount: 'demo_hq', homePath: '/dashboard' },
+  { code: 'ADMIN', name: '后台钥匙串', badge: '🔑', description: '管理用户角色', capability: '管理系统用户、角色和平台入口', demoAccount: 'demo_admin', homePath: '/admin' },
+]
+
+const selectedRoleInfo = computed(() => roleOptions.find((item) => item.code === selectedRole.value) ?? roleOptions[0])
 
 const form = reactive({
   account: '',
@@ -83,6 +131,32 @@ const rules: FormRules<typeof form> = {
   ],
 }
 
+function selectRole(role: RoleCode) {
+  selectedRole.value = role
+}
+
+function fillDemoAccount() {
+  form.account = selectedRoleInfo.value.demoAccount
+  ElMessage.info('已填入演示账号，演示密码请查看运行说明或向组长获取')
+}
+
+function getRoleName(role: RoleCode) {
+  return roleOptions.find((item) => item.code === role)?.name ?? role
+}
+
+function getLoginTarget(userRoles: RoleCode[]) {
+  const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
+  const target = redirect ? router.resolve(redirect) : null
+  const canUseRedirect = Boolean(target && target.name !== 'forbidden' && canAccessRoute(userRoles, target.meta.roles))
+  if (canUseRedirect) return redirect
+
+  if (userRoles.includes(selectedRole.value)) {
+    return ROLE_HOME_MAP[selectedRole.value]
+  }
+
+  return getDefaultHomeByRoles(userRoles)
+}
+
 async function submit() {
   if (!formRef.value) return
   await formRef.value.validate(async (valid) => {
@@ -91,11 +165,15 @@ async function submit() {
     try {
       const data = await loginApi(form)
       auth.setAuth(data)
-      ElMessage.success(`欢迎回到 NekoCafé，${data.user.nickname}`)
-      const roleHome = getDefaultHomeByRoles(data.user.roles)
-      const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : ''
-      const target = redirect ? router.resolve(redirect) : null
-      await router.push(target && target.name !== 'forbidden' && (!target.meta.roles || target.meta.roles.some((role) => data.user.roles.includes(role))) ? redirect : roleHome)
+      const selectedRoleName = getRoleName(selectedRole.value)
+      const matchedSelectedRole = data.user.roles.includes(selectedRole.value)
+      if (matchedSelectedRole) {
+        ElMessage.success(`欢迎回到 NekoCafé，${data.user.nickname}，已进入「${selectedRoleName}」入口`)
+      } else {
+        const actualRoles = data.user.roles.map(getRoleName).join('、') || '未配置角色'
+        ElMessage.warning(`当前账号实际角色为「${actualRoles}」，不具备「${selectedRoleName}」入口，已跳转至账号默认工作台`)
+      }
+      await router.push(getLoginTarget(data.user.roles))
     } catch (error) {
       ElMessage.error(error instanceof Error ? error.message : '登录失败，请稍后重试')
     } finally {
@@ -202,8 +280,121 @@ async function submit() {
   letter-spacing: -0.04em;
 }
 .card-heading p {
-  margin: 0 0 26px;
+  margin: 0 0 24px;
   color: rgba(59, 38, 24, 0.62);
+}
+.role-dock {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+.role-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  min-height: 104px;
+  border: 1px solid rgba(217, 119, 6, 0.12);
+  border-radius: 20px;
+  padding: 14px 14px 12px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 88% 16%, rgba(255, 255, 255, 0.78), transparent 28%),
+    rgba(255, 248, 240, 0.72);
+  box-shadow: 0 12px 30px rgba(122, 73, 28, 0.08);
+  color: #4a2d1b;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+}
+.role-card::after {
+  content: '当前入口';
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #d97706;
+  color: #fff7ed;
+  font-size: 10px;
+  font-weight: 900;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.role-card:hover,
+.role-card.is-active {
+  transform: translateY(-2px);
+  border-color: rgba(217, 119, 6, 0.46);
+  background:
+    radial-gradient(circle at 88% 16%, rgba(245, 158, 11, 0.2), transparent 32%),
+    rgba(255, 255, 255, 0.86);
+  box-shadow: 0 18px 38px rgba(217, 119, 6, 0.16);
+}
+.role-card.is-active::after {
+  opacity: 1;
+  transform: translateY(0);
+}
+.role-mark {
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  background: rgba(217, 119, 6, 0.1);
+  font-size: 18px;
+}
+.role-card strong {
+  color: #3b2618;
+  font-size: 15px;
+}
+.role-card small {
+  color: #d97706;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+.role-card span:nth-of-type(2) {
+  color: rgba(59, 38, 24, 0.58);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.role-card em {
+  width: fit-content;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: rgba(143, 191, 135, 0.14);
+  color: #537245;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 900;
+}
+.demo-helper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -8px 0 22px;
+  border: 1px solid rgba(143, 191, 135, 0.28);
+  border-radius: 18px;
+  padding: 12px 14px;
+  background:
+    radial-gradient(circle at 94% 20%, rgba(143, 191, 135, 0.18), transparent 36%),
+    rgba(255, 255, 255, 0.62);
+}
+.demo-helper div {
+  display: grid;
+  gap: 4px;
+}
+.demo-helper strong {
+  color: #3b2618;
+  font-size: 14px;
+}
+.demo-helper span {
+  color: rgba(59, 38, 24, 0.62);
+  font-size: 12px;
+  line-height: 1.5;
 }
 .auth-form :deep(.el-input__wrapper) {
   border-radius: 16px;
@@ -311,6 +502,8 @@ a {
 @media (max-width: 560px) {
   .auth-scene { padding: 18px; }
   .auth-card { padding: 30px 22px; }
+  .role-dock { grid-template-columns: 1fr; }
+  .role-card { min-height: 92px; }
   .form-row { align-items: flex-start; flex-direction: column; gap: 8px; }
 }
 </style>

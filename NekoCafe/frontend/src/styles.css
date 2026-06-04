@@ -1,8 +1,38 @@
+:root {
+  --neko-cream: #fff8f0;
+  --neko-cream-deep: #ffe8d1;
+  --neko-card: rgba(255, 255, 255, 0.78);
+  --neko-card-solid: #fffaf4;
+  --neko-border: rgba(122, 73, 28, 0.14);
+  --neko-caramel: #d97706;
+  --neko-caramel-bright: #f59e0b;
+  --neko-peach: #ffb7a1;
+  --neko-espresso: #3b2618;
+  --neko-muted: #7c5f4a;
+  --neko-matcha: #6f945d;
+  --neko-shadow-soft: 0 16px 42px rgba(122, 73, 28, 0.12);
+  --neko-shadow-lift: 0 26px 70px rgba(100, 54, 16, 0.18);
+}
+
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: Inter, "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #fff8f0;
+  font-family: "LXGW WenKai Screen", "Noto Serif SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 14% 12%, rgba(255, 183, 161, 0.38), transparent 28%),
+    radial-gradient(circle at 92% 8%, rgba(143, 191, 135, 0.22), transparent 24%),
+    linear-gradient(135deg, var(--neko-cream) 0%, var(--neko-cream-deep) 52%, #fff4e8 100%);
   color: #2f2520;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
 }
 
 a {
@@ -10,9 +40,128 @@ a {
   text-decoration: none;
 }
 
+.page-card,
+.section-card,
+.soft-panel {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background:
+    radial-gradient(circle at 96% 0%, rgba(245, 158, 11, 0.08), transparent 30%),
+    var(--neko-card);
+  box-shadow: var(--neko-shadow-soft);
+  backdrop-filter: blur(18px);
+}
+
 .page-card {
-  background: #fff;
-  border-radius: 16px;
-  box-shadow: 0 8px 24px rgb(80 52 30 / 10%);
-  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 30px;
+  padding: 28px;
+}
+
+.page-card::before {
+  content: '';
+  position: absolute;
+  right: 28px;
+  top: 24px;
+  width: 90px;
+  height: 76px;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 76%, rgba(139, 90, 43, 0.14) 0 18px, transparent 19px),
+    radial-gradient(circle at 18% 38%, rgba(139, 90, 43, 0.1) 0 9px, transparent 10px),
+    radial-gradient(circle at 42% 18%, rgba(139, 90, 43, 0.1) 0 10px, transparent 11px),
+    radial-gradient(circle at 66% 18%, rgba(139, 90, 43, 0.1) 0 10px, transparent 11px),
+    radial-gradient(circle at 88% 38%, rgba(139, 90, 43, 0.1) 0 9px, transparent 10px);
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: flex-start;
+  margin-bottom: 22px;
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: var(--neko-caramel);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.page-header h1,
+.page-card > h1 {
+  margin: 0 0 8px;
+  color: var(--neko-espresso);
+  font-size: clamp(28px, 4vw, 44px);
+  letter-spacing: -0.04em;
+}
+
+.page-header p,
+.page-card > p,
+.muted {
+  margin: 0;
+  color: var(--neko-muted);
+  line-height: 1.75;
+}
+
+.section-card,
+.soft-panel {
+  border-radius: 24px;
+  padding: 20px;
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px;
+}
+
+.stat-card {
+  border: 1px solid var(--neko-border);
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 255, 255, 0.64);
+  box-shadow: 0 12px 30px rgba(122, 73, 28, 0.08);
+}
+
+.stat-card strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--neko-espresso);
+  font-size: 26px;
+}
+
+.neko-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.role-page {
+  display: grid;
+  gap: 22px;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--neko-caramel);
+  --el-button-border-color: var(--neko-caramel);
+  --el-button-hover-bg-color: var(--neko-caramel-bright);
+  --el-button-hover-border-color: var(--neko-caramel-bright);
+}
+
+.el-table,
+.el-card {
+  border-radius: 18px;
+  overflow: hidden;
+}
+
+@media (max-width: 760px) {
+  .page-card { padding: 20px; border-radius: 24px; }
+  .page-header { flex-direction: column; }
 }

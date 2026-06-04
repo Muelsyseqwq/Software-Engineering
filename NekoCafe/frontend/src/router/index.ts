@@ -10,7 +10,7 @@ const router = createRouter({
       path: '/',
       component: PublicLayout,
       children: [
-        { path: '', redirect: '/stores' },
+        { path: '', redirect: '/login' },
         { path: 'login', name: 'login', component: () => import('@/views/auth/LoginView.vue') },
         { path: 'register', name: 'register', component: () => import('@/views/auth/RegisterView.vue') },
       ],

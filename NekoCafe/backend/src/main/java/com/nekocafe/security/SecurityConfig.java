@@ -47,7 +47,11 @@ public class SecurityConfig {
                     "/v3/api-docs/**",
                     "/api/auth/status",
                     "/api/auth/login",
-                    "/api/auth/register"
+                    "/api/auth/register",
+                    "/api/store",
+                    "/api/store/**",
+                    "/api/menu",
+                    "/api/menu/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

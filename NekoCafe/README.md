@@ -77,6 +77,21 @@ npm run dev
 
 前端默认地址：`http://localhost:5173`。
 
+## 角色演示账号
+
+数据库迁移会创建以下课程演示账号，用于验证不同角色登录后的首页、菜单和接口权限。数据库中保存的是 BCrypt 哈希，不是明文密码；这些账号仅用于开发/答辩演示，真实部署前请禁用或更换。
+
+| 角色 | 用户名 | 登录后入口 |
+|---|---|---|
+| 顾客 | `demo_customer` | `/stores` |
+| 店员 | `demo_staff` | `/staff` |
+| 猫咪管家 | `demo_cat` | `/cats` |
+| 店长 | `demo_manager` | `/manager` |
+| 总部运营 | `demo_hq` | `/dashboard` |
+| 系统管理员 | `demo_admin` | `/admin` |
+
+统一演示密码：`NekoCafe@2026`。
+
 ## 可选 Redis
 
 如果需要本地 Redis：
