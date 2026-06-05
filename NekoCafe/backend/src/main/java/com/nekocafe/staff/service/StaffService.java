@@ -1,13 +1,33 @@
 package com.nekocafe.staff.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.nekocafe.common.exception.BizException;
+import com.nekocafe.order.entity.FoodOrder;
+import com.nekocafe.order.entity.FoodOrderItem;
+import com.nekocafe.order.mapper.FoodOrderItemMapper;
+import com.nekocafe.order.mapper.FoodOrderMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 public class StaffService {
+
+    private static final String PAID = "PAID";
+    private static final String PREPARING = "PREPARING";
+    private static final String COMPLETED = "COMPLETED";
+
+    private final FoodOrderMapper orderMapper;
+    private final FoodOrderItemMapper orderItemMapper;
+
+    public StaffService(FoodOrderMapper orderMapper, FoodOrderItemMapper orderItemMapper) {
+        this.orderMapper = orderMapper;
+        this.orderItemMapper = orderItemMapper;
+    }
 
     public List<StaffReservationRow> todayReservations() {
         return List.of(
@@ -20,17 +40,74 @@ public class StaffService {
     }
 
     public List<StaffOrderRow> pendingOrders() {
-        return List.of(
-            new StaffOrderRow(1L, "O20260604001", "拿铁 x1 / 猫爪蛋糕 x1", new BigDecimal("58.00"), "待制作", LocalDateTime.now().minusMinutes(20).toString())
+        return orderMapper.selectList(new LambdaQueryWrapper<FoodOrder>()
+                .eq(FoodOrder::getDeleted, 0)
+                .in(FoodOrder::getStatus, List.of(PAID, PREPARING))
+                .orderByAsc(FoodOrder::getCreatedAt)
+                .orderByAsc(FoodOrder::getId))
+            .stream()
+            .map(this::toStaffOrderRow)
+            .toList();
+    }
+
+    @Transactional
+    public void startOrder(Long id) {
+        FoodOrder order = loadOrder(id);
+        if (PREPARING.equals(order.getStatus())) {
+            return;
+        }
+        if (!PAID.equals(order.getStatus())) {
+            throw new BizException(5002, "只有已支付订单可以开始制作");
+        }
+        order.setStatus(PREPARING);
+        orderMapper.updateById(order);
+    }
+
+    @Transactional
+    public void completeOrder(Long id) {
+        FoodOrder order = loadOrder(id);
+        if (COMPLETED.equals(order.getStatus())) {
+            return;
+        }
+        if (!PAID.equals(order.getStatus()) && !PREPARING.equals(order.getStatus())) {
+            throw new BizException(5003, "只有已支付或制作中的订单可以完成");
+        }
+        order.setStatus(COMPLETED);
+        orderMapper.updateById(order);
+    }
+
+    private FoodOrder loadOrder(Long id) {
+        FoodOrder order = orderMapper.selectOne(new LambdaQueryWrapper<FoodOrder>()
+            .eq(FoodOrder::getId, id)
+            .eq(FoodOrder::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (order == null) {
+            throw new BizException(5001, "订单不存在");
+        }
+        return order;
+    }
+
+    private StaffOrderRow toStaffOrderRow(FoodOrder order) {
+        return new StaffOrderRow(
+            order.getId(),
+            order.getOrderNo(),
+            formatOrderSummary(order.getId()),
+            order.getTotalAmount(),
+            order.getStatus(),
+            order.getCreatedAt() == null ? "" : order.getCreatedAt().toString()
         );
     }
 
-    public void startOrder(Long id) {
-        // 框架占位：后续由店员模块负责人接入订单开始制作状态流转。
-    }
-
-    public void completeOrder(Long id) {
-        // 框架占位：后续由店员模块负责人接入订单完成状态流转。
+    private String formatOrderSummary(Long orderId) {
+        List<FoodOrderItem> items = orderItemMapper.selectList(new LambdaQueryWrapper<FoodOrderItem>()
+            .eq(FoodOrderItem::getOrderId, orderId)
+            .orderByAsc(FoodOrderItem::getId));
+        if (items.isEmpty()) {
+            return "暂无菜品";
+        }
+        return items.stream()
+            .map(item -> item.getDishName() + " x" + item.getQuantity())
+            .collect(Collectors.joining(" / "));
     }
 
     public record StaffReservationRow(Long id, String reservationNo, String customerName, String customerPhone, int partySize, String reservedTime, String status) {

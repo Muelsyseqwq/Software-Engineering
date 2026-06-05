@@ -1,6 +1,8 @@
 import { http } from './http'
 import type { ApiResult } from '@/types/api'
 
+export type OrderStatus = 'CREATED' | 'PAID' | 'PREPARING' | 'COMPLETED'
+
 export interface StaffReservationRow {
   id: number
   reservationNo: string
@@ -16,7 +18,7 @@ export interface StaffOrderRow {
   orderNo: string
   summary: string
   amount: number
-  status: string
+  status: OrderStatus | string
   createdAt: string
 }
 
