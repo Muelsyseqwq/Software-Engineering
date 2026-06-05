@@ -68,14 +68,14 @@
           <el-button type="primary" size="large" :loading="creating" :disabled="selectedItems.length === 0" @click="submitOrder">
             创建订单
           </el-button>
-          <el-button size="large" :loading="paying" :disabled="!currentOrder || currentOrder.status === 'PAID'" @click="payOrder">
+          <el-button size="large" :loading="paying" :disabled="!currentOrder || currentOrder.status !== 'CREATED'" @click="payOrder">
             沙箱支付
           </el-button>
         </div>
 
         <div v-if="currentOrder" class="result-card">
           <span>订单 {{ currentOrder.orderNo }}</span>
-          <strong>{{ currentOrder.status === 'PAID' ? '已支付' : '待支付' }}</strong>
+          <strong>{{ getOrderStatusText(currentOrder.status) }}</strong>
           <small>{{ currentOrder.storeName }} · ¥{{ Number(currentOrder.totalAmount).toFixed(2) }}</small>
         </div>
         <div v-if="payment" class="result-card paid">
@@ -102,7 +102,7 @@
         </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
-            <el-tag :type="row.status === 'PAID' ? 'success' : 'warning'">{{ row.status === 'PAID' ? '已支付' : '待支付' }}</el-tag>
+            <el-tag :type="getOrderStatusTagType(row.status)">{{ getOrderStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column label="菜品" min-width="220">
@@ -199,6 +199,26 @@ async function payOrder() {
 
 function formatOrderItems(order: OrderResponse) {
   return order.items.map((item) => `${item.dishName}×${item.quantity}`).join(' / ')
+}
+
+function getOrderStatusText(status: string) {
+  const statusMap: Record<string, string> = {
+    CREATED: '待支付',
+    PAID: '已支付，待制作',
+    PREPARING: '制作中',
+    COMPLETED: '已完成',
+  }
+  return statusMap[status] || '状态未知'
+}
+
+function getOrderStatusTagType(status: string) {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
+    CREATED: 'warning',
+    PAID: 'primary',
+    PREPARING: 'warning',
+    COMPLETED: 'success',
+  }
+  return typeMap[status] || 'info'
 }
 
 async function loadOrders() {

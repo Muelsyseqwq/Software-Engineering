@@ -13,6 +13,8 @@ export interface CreateOrderRequest {
   remark?: string
 }
 
+export type OrderStatus = 'CREATED' | 'PAID' | 'PREPARING' | 'COMPLETED'
+
 export interface OrderItemResponse {
   id: number
   dishId: number
@@ -29,7 +31,7 @@ export interface OrderResponse {
   storeName: string
   reservationId?: number
   totalAmount: number
-  status: string
+  status: OrderStatus | string
   remark?: string
   createdAt: string
   items: OrderItemResponse[]

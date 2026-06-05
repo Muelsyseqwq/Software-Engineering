@@ -14,12 +14,12 @@
       <el-table-column prop="summary" label="菜品摘要" min-width="180" />
       <el-table-column prop="amount" label="金额" width="100" />
       <el-table-column prop="status" label="状态" width="120">
-        <template #default="{ row }"><el-tag>{{ row.status }}</el-tag></template>
+        <template #default="{ row }"><el-tag :type="getOrderStatusTagType(row.status)">{{ getOrderStatusText(row.status) }}</el-tag></template>
       </el-table-column>
       <el-table-column prop="createdAt" label="创建时间" min-width="160" />
       <el-table-column label="操作" width="190">
         <template #default="{ row }">
-          <el-button size="small" @click="handleStart(row.id)">开始制作</el-button>
+          <el-button size="small" :disabled="row.status === 'PREPARING'" @click="handleStart(row.id)">开始制作</el-button>
           <el-button type="success" size="small" @click="handleComplete(row.id)">完成</el-button>
         </template>
       </el-table-column>
@@ -33,6 +33,26 @@ import { ElMessage } from 'element-plus'
 import { completeOrder, fetchPendingOrders, startOrder, type StaffOrderRow } from '@/api/staff'
 
 const orders = ref<StaffOrderRow[]>([])
+
+function getOrderStatusText(status: string) {
+  const statusMap: Record<string, string> = {
+    CREATED: '待支付',
+    PAID: '待制作',
+    PREPARING: '制作中',
+    COMPLETED: '已完成',
+  }
+  return statusMap[status] || '状态未知'
+}
+
+function getOrderStatusTagType(status: string) {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
+    CREATED: 'warning',
+    PAID: 'primary',
+    PREPARING: 'warning',
+    COMPLETED: 'success',
+  }
+  return typeMap[status] || 'info'
+}
 
 async function loadOrders() {
   try {
