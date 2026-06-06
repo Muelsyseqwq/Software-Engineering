@@ -2,9 +2,9 @@
   <section class="page-card role-page">
     <header class="page-header">
       <div>
-        <p class="eyebrow">HQ_OPERATOR 数据看板</p>
-        <h1>数据看板</h1>
-        <p>展示预约量、订单量、营业额和平台概览。组员可继续接入图表和统计接口。</p>
+        <p class="eyebrow">总部运营 / 猫咖总控台</p>
+        <h1>运营罗盘</h1>
+        <p>展示预约量、订单量、营业额和平台概览，支持总部统一查看跨店经营状态。</p>
       </div>
       <el-button type="primary" @click="loadSummary">刷新</el-button>
     </header>

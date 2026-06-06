@@ -2,9 +2,9 @@
   <section class="page-card role-page">
     <header class="page-header">
       <div>
-        <p class="eyebrow">ADMIN / HQ_OPERATOR 后台</p>
-        <h1>系统管理</h1>
-        <p>管理用户、角色、门店和系统配置。组员可直接在此页面补充列表接口和管理操作。</p>
+        <p class="eyebrow">总部运营 / 总控后台</p>
+        <h1>总控后台</h1>
+        <p>管理用户、角色、门店和系统配置，作为总部运营统一维护平台基础数据的入口。</p>
       </div>
       <el-button type="primary" @click="loadData">刷新</el-button>
     </header>
