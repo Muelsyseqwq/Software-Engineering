@@ -112,9 +112,17 @@ const roleOptions: LoginRoleOption[] = [
   { code: 'STAFF', name: '前台铃铛', badge: '🛎️', description: '处理签到与订单履约', capability: '查看今日预约、办理签到、推进订单', demoAccount: 'demo_staff', homePath: '/staff' },
   { code: 'CAT_CARETAKER', name: '猫咪健康簿', badge: '🐈', description: '维护猫咪档案', capability: '维护猫咪档案与健康状态', demoAccount: 'demo_cat', homePath: '/cats' },
   { code: 'STORE_MANAGER', name: '门店掌柜', badge: '🏠', description: '管理门店运营', capability: '查看桌位、门店状态和本店预约', demoAccount: 'demo_manager', homePath: '/manager' },
-  { code: 'HQ_OPERATOR', name: '咖啡罗盘', badge: '🧭', description: '查看经营数据', capability: '查看平台经营数据和跨店看板', demoAccount: 'demo_hq', homePath: '/dashboard' },
-  { code: 'ADMIN', name: '后台钥匙串', badge: '🔑', description: '管理用户角色', capability: '管理系统用户、角色和平台入口', demoAccount: 'demo_admin', homePath: '/admin' },
+  { code: 'HQ_OPERATOR', name: '猫咖总控台', badge: '🧭', description: '总部运营与系统管理', capability: '查看跨店经营数据、活动运营、用户角色与平台配置', demoAccount: 'demo_hq', homePath: '/dashboard' },
 ]
+
+const roleDisplayNames: Record<RoleCode, string> = {
+  CUSTOMER: '猫爪会员',
+  STAFF: '前台铃铛',
+  CAT_CARETAKER: '猫咪健康簿',
+  STORE_MANAGER: '门店掌柜',
+  HQ_OPERATOR: '猫咖总控台',
+  ADMIN: '猫咖总控台',
+}
 
 const selectedRoleInfo = computed(() => roleOptions.find((item) => item.code === selectedRole.value) ?? roleOptions[0])
 
@@ -141,7 +149,7 @@ function fillDemoAccount() {
 }
 
 function getRoleName(role: RoleCode) {
-  return roleOptions.find((item) => item.code === role)?.name ?? role
+  return roleDisplayNames[role] ?? role
 }
 
 function getLoginTarget(userRoles: RoleCode[]) {

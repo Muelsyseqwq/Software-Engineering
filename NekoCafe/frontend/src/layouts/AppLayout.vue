@@ -56,7 +56,7 @@ const roleLabels: Record<RoleCode, string> = {
   CAT_CARETAKER: '猫咪管家',
   STORE_MANAGER: '门店店长',
   HQ_OPERATOR: '总部运营',
-  ADMIN: '系统管理员',
+  ADMIN: '总部运营',
 }
 
 const roleSummary = computed(() => {

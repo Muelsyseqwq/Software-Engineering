@@ -31,7 +31,7 @@ const router = createRouter({
         { path: 'cats', name: 'cat-manage', component: () => import('@/views/cat/CatManageView.vue'), meta: { requiresAuth: true, roles: ['CAT_CARETAKER'] } },
         { path: 'manager', name: 'store-manager', component: () => import('@/views/manager/StoreManagerView.vue'), meta: { requiresAuth: true, roles: ['STORE_MANAGER'] } },
         { path: 'dashboard', name: 'dashboard', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
-        { path: 'admin', name: 'admin', component: () => import('@/views/admin/AdminHomeView.vue'), meta: { requiresAuth: true, roles: ['ADMIN'] } },
+        { path: 'admin', name: 'admin', component: () => import('@/views/admin/AdminHomeView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
         { path: '403', name: 'forbidden', component: () => import('@/views/error/ForbiddenView.vue') },
       ],
     },

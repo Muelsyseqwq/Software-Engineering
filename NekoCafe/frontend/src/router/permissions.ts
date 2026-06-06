@@ -31,8 +31,8 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   { path: '/staff/orders', label: '订单履约', icon: '🥐', hint: '推进制作状态', roles: ['STAFF'] },
   { path: '/cats', label: '猫咪档案', icon: '🐈', hint: '健康与互动记录', roles: ['CAT_CARETAKER'] },
   { path: '/manager', label: '店长管理', icon: '🏠', hint: '门店与桌位运营', roles: ['STORE_MANAGER'] },
-  { path: '/dashboard', label: '数据看板', icon: '🧭', hint: '跨店经营罗盘', roles: ['HQ_OPERATOR', 'ADMIN'] },
-  { path: '/admin', label: '系统管理', icon: '🔑', hint: '用户角色与平台', roles: ['ADMIN'] },
+  { path: '/dashboard', label: '运营罗盘', icon: '🧭', hint: '跨店经营总览', roles: ['HQ_OPERATOR', 'ADMIN'] },
+  { path: '/admin', label: '总控后台', icon: '🔑', hint: '用户角色与平台', roles: ['HQ_OPERATOR', 'ADMIN'] },
 ]
 
 export function hasAnyRole(userRoles: RoleCode[], requiredRoles?: RoleCode[]) {
