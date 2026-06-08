@@ -7,6 +7,7 @@ public record StaffOrderRow(
     String orderNo,
     String summary,
     BigDecimal amount,
+    String tableNo,
     String status,
     String createdAt
 ) {

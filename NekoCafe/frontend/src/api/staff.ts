@@ -1,15 +1,14 @@
 import { http } from './http'
 import type { ApiResult } from '@/types/api'
 
-export type OrderStatus = 'CREATED' | 'PAID' | 'PREPARING' | 'COMPLETED'
-
 export interface StaffReservationRow {
   id: number
   reservationNo: string
   customerName: string
   customerPhone: string
   partySize: number
-  reservedTime: string
+  timeSlot: string
+  remark: string
   status: string
 }
 
@@ -18,8 +17,30 @@ export interface StaffOrderRow {
   orderNo: string
   summary: string
   amount: number
-  status: OrderStatus | string
+  tableNo: string
+  status: string
   createdAt: string
+}
+
+export interface DiningTable {
+  id: number
+  storeId: number
+  tableNo: string
+  capacity: number
+  area: string
+  status: string
+}
+
+export interface Cat {
+  id: number
+  storeId: number
+  name: string
+  breed: string
+  age: number
+  gender: string
+  personality: string
+  healthStatus: string
+  status: string
 }
 
 export async function fetchTodayReservations() {
@@ -44,5 +65,27 @@ export async function startOrder(id: number) {
 
 export async function completeOrder(id: number) {
   const { data } = await http.post<ApiResult<void>>(`/staff/orders/${id}/complete`)
+  return data.data
+}
+
+export async function fetchHandledOrders() {
+  const { data } = await http.get<ApiResult<StaffOrderRow[]>>('/staff/orders/handled')
+  return data.data
+}
+
+export async function fetchTables(status?: string) {
+  const { data } = await http.get<ApiResult<DiningTable[]>>('/staff/tables', { params: { status } })
+  return data.data
+}
+
+export async function fetchCats(status?: string) {
+  const { data } = await http.get<ApiResult<Cat[]>>('/staff/cats', { params: { status } })
+  return data.data
+}
+
+export async function updateTableStatus(id: number, status: string, reason?: string) {
+  const { data } = await http.put<ApiResult<void>>(`/staff/tables/${id}/status`, null, {
+    params: { status, reason }
+  })
   return data.data
 }

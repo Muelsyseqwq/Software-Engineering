@@ -6,7 +6,8 @@ public record StaffReservationRow(
     String customerName,
     String customerPhone,
     Integer partySize,
-    String reservedTime,
+    String timeSlot,
+    String remark,
     String status
 ) {
 }

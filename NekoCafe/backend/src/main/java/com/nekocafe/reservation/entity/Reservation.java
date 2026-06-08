@@ -22,6 +22,9 @@ public class Reservation {
     private String contactPhone;
     private String remark;
     private LocalDateTime checkedInAt;
+    private LocalDateTime checkedOutAt;
+    private LocalDateTime completedAt;
+    private LocalDateTime cancelledAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
@@ -51,6 +54,12 @@ public class Reservation {
     public void setRemark(String remark) { this.remark = remark; }
     public LocalDateTime getCheckedInAt() { return checkedInAt; }
     public void setCheckedInAt(LocalDateTime checkedInAt) { this.checkedInAt = checkedInAt; }
+    public LocalDateTime getCheckedOutAt() { return checkedOutAt; }
+    public void setCheckedOutAt(LocalDateTime checkedOutAt) { this.checkedOutAt = checkedOutAt; }
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public LocalDateTime getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

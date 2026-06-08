@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">STAFF 签到</p>
         <h1>预约签到</h1>
-        <p>店员为顾客办理到店签到和入座，组员只需完善表格字段与签到接口逻辑。</p>
+        <p>店员为顾客办理到店签到和入座。可查看预约备注和时段信息。</p>
       </div>
       <el-button type="primary" @click="loadReservations">刷新预约</el-button>
     </header>
@@ -14,13 +14,15 @@
       <el-table-column prop="customerName" label="顾客姓名" />
       <el-table-column prop="customerPhone" label="手机号" min-width="130" />
       <el-table-column prop="partySize" label="人数" width="80" />
-      <el-table-column prop="reservedTime" label="预约时间" min-width="160" />
+      <el-table-column prop="timeSlot" label="预约时段" min-width="130" />
+      <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
       <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }"><el-tag>{{ row.status }}</el-tag></template>
       </el-table-column>
       <el-table-column label="操作" width="120">
         <template #default="{ row }">
-          <el-button type="success" size="small" @click="handleCheckIn(row.id)">签到</el-button>
+          <el-button v-if="row.status !== '已签到' && row.status !== '已完成' && row.status !== '已取消'" type="success" size="small" @click="handleCheckIn(row.id)">签到</el-button>
+          <span v-else>-</span>
         </template>
       </el-table-column>
     </el-table>
@@ -38,7 +40,7 @@ async function loadReservations() {
   try {
     reservations.value = await fetchTodayReservations()
   } catch (error) {
-    ElMessage.warning(error instanceof Error ? error.message : '今日预约接口待接入')
+    ElMessage.warning(error instanceof Error ? error.message : '加载预约数据失败')
   }
 }
 
@@ -48,7 +50,7 @@ async function handleCheckIn(id: number) {
     ElMessage.success('签到成功')
     await loadReservations()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '签到接口待接入')
+    ElMessage.error(error instanceof Error ? error.message : '签到失败')
   }
 }
 
