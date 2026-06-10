@@ -18,16 +18,26 @@
       </el-col>
     </el-row>
 
-    <el-card header="图表区域预留">
-      <el-empty description="可在这里接入 ECharts：近 7 日预约数、门店订单量、营业额趋势" />
-    </el-card>
+    <el-row :gutter="16" class="chart-row">
+      <el-col :xs="24" :lg="12">
+        <el-card header="近 7 日营业额">
+          <div ref="revenueChartRef" class="chart-box" />
+        </el-card>
+      </el-col>
+      <el-col :xs="24" :lg="12">
+        <el-card header="近 7 日预约数">
+          <div ref="reservationChartRef" class="chart-box" />
+        </el-card>
+      </el-col>
+    </el-row>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchDashboardSummary, type DashboardSummary } from '@/api/dashboard'
+import * as echarts from 'echarts'
+import { fetchDashboardReservations, fetchDashboardRevenue, fetchDashboardSummary, type DashboardSummary, type DashboardTrendPoint } from '@/api/dashboard'
 
 const summary = ref<DashboardSummary>({
   reservationCount: 0,
@@ -37,6 +47,13 @@ const summary = ref<DashboardSummary>({
   storeCount: 0,
   catCount: 0,
 })
+
+const revenueData = ref<DashboardTrendPoint[]>([])
+const reservationData = ref<DashboardTrendPoint[]>([])
+const revenueChartRef = ref<HTMLDivElement | null>(null)
+const reservationChartRef = ref<HTMLDivElement | null>(null)
+let revenueChart: echarts.ECharts | null = null
+let reservationChart: echarts.ECharts | null = null
 
 const statItems = computed(() => [
   { label: '今日预约数', value: summary.value.reservationCount },
@@ -55,7 +72,90 @@ async function loadSummary() {
   }
 }
 
-onMounted(loadSummary)
+async function loadTrends() {
+  try {
+    const [revenue, reservations] = await Promise.all([
+      fetchDashboardRevenue(),
+      fetchDashboardReservations(),
+    ])
+    revenueData.value = revenue
+    reservationData.value = reservations
+    await nextTick()
+    renderCharts()
+  } catch (error) {
+    ElMessage.warning(error instanceof Error ? error.message : '图表数据接口待接入')
+  }
+}
+
+function initCharts() {
+  if (revenueChartRef.value && !revenueChart) {
+    revenueChart = echarts.init(revenueChartRef.value)
+  }
+  if (reservationChartRef.value && !reservationChart) {
+    reservationChart = echarts.init(reservationChartRef.value)
+  }
+}
+
+function renderCharts() {
+  initCharts()
+  if (revenueChart) {
+    revenueChart.setOption({
+      grid: { left: 32, right: 20, top: 20, bottom: 28 },
+      xAxis: { type: 'category', data: revenueData.value.map((item) => item.label) },
+      yAxis: { type: 'value' },
+      tooltip: { trigger: 'axis' },
+      series: [
+        {
+          name: '营业额',
+          type: 'line',
+          smooth: true,
+          data: revenueData.value.map((item) => item.value),
+          areaStyle: { color: 'rgba(212, 116, 63, 0.2)' },
+          lineStyle: { color: '#d97706' },
+          itemStyle: { color: '#d97706' },
+        },
+      ],
+    })
+  }
+  if (reservationChart) {
+    reservationChart.setOption({
+      grid: { left: 32, right: 20, top: 20, bottom: 28 },
+      xAxis: { type: 'category', data: reservationData.value.map((item) => item.label) },
+      yAxis: { type: 'value' },
+      tooltip: { trigger: 'axis' },
+      series: [
+        {
+          name: '预约数',
+          type: 'bar',
+          data: reservationData.value.map((item) => item.value),
+          itemStyle: { color: '#9a3412' },
+          barMaxWidth: 28,
+        },
+      ],
+    })
+  }
+}
+
+function resizeCharts() {
+  revenueChart?.resize()
+  reservationChart?.resize()
+}
+
+onMounted(async () => {
+  await nextTick()
+  initCharts()
+  loadSummary()
+  loadTrends()
+  window.addEventListener('resize', resizeCharts)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeCharts)
+  revenueChart?.dispose()
+  reservationChart?.dispose()
+  revenueChart = null
+  reservationChart = null
+})
 </script>
 
 <style scoped>
@@ -65,4 +165,6 @@ onMounted(loadSummary)
 .stat-row :deep(.el-card__body) { display: flex; flex-direction: column; gap: 8px; }
 .stat-row strong { font-size: 26px; color: #3b2618; }
 .stat-row span { color: #7c6554; }
+.chart-row .el-card { height: 100%; }
+.chart-box { width: 100%; height: 280px; }
 </style>
