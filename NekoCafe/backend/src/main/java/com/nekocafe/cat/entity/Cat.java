@@ -2,8 +2,10 @@ package com.nekocafe.cat.entity;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @TableName("cat")
@@ -15,14 +17,18 @@ public class Cat {
     private String name;
     private String breed;
     private Integer age;
+    private BigDecimal weight;
     private String gender;
     private String personality;
+    private String interact;
     private String healthStatus;
+    private String vaccinium;
     private String photoUrl;
     private String description;
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    @TableLogic
     private Integer deleted;
 
     public Long getId() { return id; }
@@ -35,12 +41,18 @@ public class Cat {
     public void setBreed(String breed) { this.breed = breed; }
     public Integer getAge() { return age; }
     public void setAge(Integer age) { this.age = age; }
+    public BigDecimal getWeight() { return weight; }
+    public void setWeight(BigDecimal weight) { this.weight = weight; }
     public String getGender() { return gender; }
     public void setGender(String gender) { this.gender = gender; }
     public String getPersonality() { return personality; }
     public void setPersonality(String personality) { this.personality = personality; }
+    public String getInteract() { return interact; }
+    public void setInteract(String interact) { this.interact = interact; }
     public String getHealthStatus() { return healthStatus; }
     public void setHealthStatus(String healthStatus) { this.healthStatus = healthStatus; }
+    public String getVaccinium() { return vaccinium; }
+    public void setVaccinium(String vaccinium) { this.vaccinium = vaccinium; }
     public String getPhotoUrl() { return photoUrl; }
     public void setPhotoUrl(String photoUrl) { this.photoUrl = photoUrl; }
     public String getDescription() { return description; }

@@ -48,6 +48,7 @@ public class SecurityConfig {
                     "/api/auth/status",
                     "/api/auth/login",
                     "/api/auth/register",
+                    "/uploads/cats/**",
                     "/api/store",
                     "/api/store/**",
                     "/api/menu",

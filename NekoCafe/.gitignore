@@ -7,6 +7,7 @@ application-local.yml
 # Logs and runtime files
 *.log
 logs/
+uploads/
 
 # Database backups / dumps
 *.sql.gz

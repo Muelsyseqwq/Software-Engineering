@@ -1,68 +1,282 @@
 <template>
-  <section class="page-card role-page">
-    <header class="page-header">
-      <div>
+  <section class="cat-page">
+    <div class="cat-hero">
+      <div class="hero-copy">
         <p class="eyebrow">CAT_CARETAKER 猫咪管家</p>
         <h1>猫咪档案管理</h1>
-        <p>维护猫咪基础信息、性格标签和健康状态。组员可直接在此页面补充表单和接口逻辑。</p>
+        <p>像整理一本猫咖手账一样，记录每只猫的体重、疫苗、互动偏好和照片。</p>
       </div>
-      <el-button type="primary" @click="openCreateDialog">新增猫咪</el-button>
-    </header>
+      <div class="hero-actions">
+        <el-button class="soft-button" @click="loadCats">刷新档案</el-button>
+        <el-button type="primary" class="hero-primary" @click="openCreateDialog">新增猫咪</el-button>
+      </div>
+    </div>
 
-    <el-table :data="cats" border empty-text="暂无猫咪档案，点击新增猫咪创建第一条记录">
-      <el-table-column prop="name" label="名字" min-width="120" />
-      <el-table-column prop="breed" label="品种" min-width="120" />
-      <el-table-column prop="age" label="年龄" width="90" />
-      <el-table-column prop="personality" label="性格" min-width="160" />
-      <el-table-column prop="healthStatus" label="健康状态" width="120">
-        <template #default="{ row }"><el-tag>{{ row.healthStatus || '待填写' }}</el-tag></template>
-      </el-table-column>
-      <el-table-column prop="status" label="状态" width="100" />
-      <el-table-column label="操作" width="160">
-        <template #default="{ row }">
-          <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
-          <el-button type="danger" size="small" @click="handleDelete(row.id)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="insight-grid">
+      <article class="insight-card">
+        <span class="insight-icon">🐾</span>
+        <div>
+          <strong>{{ cats.length }}</strong>
+          <p>档案总数</p>
+        </div>
+      </article>
+      <article class="insight-card">
+        <span class="insight-icon">🩺</span>
+        <div>
+          <strong>{{ healthyCount }}</strong>
+          <p>健康猫咪</p>
+        </div>
+      </article>
+      <article class="insight-card">
+        <span class="insight-icon">☕</span>
+        <div>
+          <strong>{{ activeCount }}</strong>
+          <p>可互动档案</p>
+        </div>
+      </article>
+    </div>
 
-    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑猫咪' : '新增猫咪'" width="520px">
+    <div class="table-shell">
+      <el-table
+        v-loading="loading"
+        :data="cats"
+        empty-text="暂无猫咪档案，点击新增猫咪创建第一条记录"
+        class="cat-table"
+      >
+        <el-table-column label="猫咪" min-width="210">
+          <template #default="{ row }">
+            <div class="cat-cell">
+              <el-avatar :size="52" :src="row.photoUrl || undefined">{{ row.name?.slice(0, 1) || '猫' }}</el-avatar>
+              <div>
+                <strong>{{ row.name }}</strong>
+                <p>{{ row.breed || '品种待填写' }} · {{ genderLabel(row.gender) }}</p>
+              </div>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="基础信息" min-width="150">
+          <template #default="{ row }">
+            <div class="mini-stack">
+              <span>{{ row.age ?? '待填写' }} 岁</span>
+              <span>{{ weightLabel(row.weight) }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="personality" label="性格标签" min-width="170">
+          <template #default="{ row }">
+            <el-tag effect="plain" class="personality-tag">{{ row.personality || '待填写' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="healthStatus" label="健康状态" width="150">
+          <template #default="{ row }">
+            <el-select
+              :model-value="normalizeHealthStatus(row.healthStatus)"
+              size="small"
+              class="status-select"
+              @change="(value: string) => handleHealthChange(row, value)"
+            >
+              <el-option v-for="item in healthStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="档案状态" width="120">
+          <template #default="{ row }">
+            <el-tag round :type="statusTagType(normalizeCatStatus(row.status))">{{ statusLabel(row.status) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="270" fixed="right">
+          <template #default="{ row }">
+            <div class="row-actions">
+              <el-button size="small" @click="openDetailDialog(row)">查看</el-button>
+              <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
+              <el-button size="small" :type="normalizeCatStatus(row.status) === 'INACTIVE' ? 'success' : 'warning'" @click="handleToggleStatus(row)">
+                {{ normalizeCatStatus(row.status) === 'INACTIVE' ? '启用' : '停用' }}
+              </el-button>
+              <el-button type="danger" size="small" @click="handleDelete(row.id)">删除</el-button>
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <el-dialog v-model="dialogVisible" :title="editingId ? '编辑猫咪档案' : '新增猫咪档案'" width="820px" class="cat-dialog">
       <el-form :model="form" label-position="top">
-        <el-form-item label="名字"><el-input v-model="form.name" placeholder="例如：拿铁" /></el-form-item>
-        <el-form-item label="品种"><el-input v-model="form.breed" placeholder="例如：英短" /></el-form-item>
-        <el-form-item label="年龄"><el-input v-model.number="form.age" placeholder="例如：2" /></el-form-item>
-        <el-form-item label="性格"><el-input v-model="form.personality" placeholder="亲人 / 安静 / 活泼" /></el-form-item>
-        <el-form-item label="健康状态"><el-input v-model="form.healthStatus" placeholder="健康 / 观察中" /></el-form-item>
-        <el-form-item label="描述"><el-input v-model="form.description" type="textarea" rows="3" /></el-form-item>
+        <div class="photo-editor">
+          <div class="photo-frame">
+            <el-avatar :size="112" :src="form.photoUrl || undefined">{{ form.name?.slice(0, 1) || '猫' }}</el-avatar>
+          </div>
+          <div class="photo-editor__content">
+            <div>
+              <h3>档案照片</h3>
+              <p>本地上传后会生成可访问地址，保存档案时写入数据库。</p>
+            </div>
+            <div class="upload-row">
+              <el-upload
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                :show-file-list="false"
+                :http-request="handlePhotoUpload"
+                :before-upload="beforePhotoUpload"
+              >
+                <el-button type="primary" plain :loading="uploading">上传本地照片</el-button>
+              </el-upload>
+              <span class="form-tip">jpg / png / webp / gif，≤ 5MB</span>
+            </div>
+            <el-input v-model="form.photoUrl" placeholder="也可以填写网络图片地址或保留上传后的地址" />
+          </div>
+        </div>
+
+        <div class="form-section-title">基础档案</div>
+        <div class="form-grid">
+          <el-form-item label="名字" required><el-input v-model="form.name" placeholder="例如：拿铁" /></el-form-item>
+          <el-form-item label="品种"><el-input v-model="form.breed" placeholder="例如：英短" /></el-form-item>
+          <el-form-item label="年龄"><el-input-number v-model="form.age" :min="0" :max="40" controls-position="right" /></el-form-item>
+          <el-form-item label="体重（kg）">
+            <el-input-number v-model="form.weight" :min="0.2" :max="20" :precision="2" :step="0.1" controls-position="right" />
+          </el-form-item>
+          <el-form-item label="性别">
+            <el-select v-model="form.gender" placeholder="请选择性别" clearable>
+              <el-option v-for="item in genderOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="性格"><el-input v-model="form.personality" placeholder="亲人 / 安静 / 活泼" /></el-form-item>
+          <el-form-item label="健康状态">
+            <el-select v-model="form.healthStatus" placeholder="请选择健康状态">
+              <el-option v-for="item in healthStatusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="档案状态">
+            <el-select v-model="form.status" placeholder="请选择档案状态">
+              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
+            </el-select>
+          </el-form-item>
+        </div>
+
+        <div class="form-section-title">护理与互动</div>
+        <el-form-item label="疫苗信息">
+          <el-input v-model="form.vaccinium" type="textarea" rows="2" placeholder="例如：猫三联已接种，狂犬疫苗 2026-03 到期" />
+        </el-form-item>
+        <el-form-item label="互动记录 / 互动偏好">
+          <el-input v-model="form.interact" type="textarea" rows="2" placeholder="例如：喜欢逗猫棒，不喜欢被抱太久" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="form.description" type="textarea" rows="3" placeholder="记录护理注意事项、特殊饮食、适合互动场景等" />
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSubmit">保存</el-button>
+        <el-button type="primary" :loading="submitting" @click="handleSubmit">保存档案</el-button>
       </template>
+    </el-dialog>
+
+    <el-dialog v-model="detailVisible" title="猫咪档案详情" width="680px" class="cat-dialog">
+      <div v-if="currentCat" class="cat-detail">
+        <div class="detail-cover">
+          <el-avatar :size="112" :src="currentCat.photoUrl || undefined">{{ currentCat.name?.slice(0, 1) || '猫' }}</el-avatar>
+          <div>
+            <p class="eyebrow">NEKO PROFILE</p>
+            <h2>{{ currentCat.name }}</h2>
+            <p>{{ currentCat.breed || '品种待填写' }} · {{ genderLabel(currentCat.gender) }}</p>
+          </div>
+        </div>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="年龄">{{ currentCat.age ?? '待填写' }}</el-descriptions-item>
+          <el-descriptions-item label="体重">{{ weightLabel(currentCat.weight) }}</el-descriptions-item>
+          <el-descriptions-item label="性格">{{ currentCat.personality || '待填写' }}</el-descriptions-item>
+          <el-descriptions-item label="疫苗信息">{{ currentCat.vaccinium || '待填写' }}</el-descriptions-item>
+          <el-descriptions-item label="互动记录">{{ currentCat.interact || '待填写' }}</el-descriptions-item>
+          <el-descriptions-item label="健康状态">
+            <el-tag :type="healthTagType(currentCat.healthStatus)">{{ healthStatusLabel(currentCat.healthStatus) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="档案状态">
+            <el-tag :type="statusTagType(currentCat.status)">{{ statusLabel(currentCat.status) }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="描述">{{ currentCat.description || '暂无描述' }}</el-descriptions-item>
+        </el-descriptions>
+      </div>
     </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { createCat, deleteCat, fetchCats, updateCat, type CatProfile } from '@/api/cat'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadRequestOptions } from 'element-plus'
+import {
+  createCat,
+  deleteCat,
+  fetchCat,
+  fetchCats,
+  updateCat,
+  updateCatHealthStatus,
+  updateCatStatus,
+  uploadCatPhoto,
+  type CatHealthStatus,
+  type CatProfile,
+  type CatStatus,
+} from '@/api/cat'
+
+const healthStatusOptions: Array<{ label: string; value: CatHealthStatus }> = [
+  { label: '健康', value: 'HEALTHY' },
+  { label: '观察中', value: 'OBSERVING' },
+  { label: '治疗中', value: 'TREATMENT' },
+  { label: '恢复中', value: 'RECOVERING' },
+]
+
+const statusOptions: Array<{ label: string; value: CatStatus }> = [
+  { label: '正常', value: 'ACTIVE' },
+  { label: '已停用', value: 'INACTIVE' },
+  { label: '已领养', value: 'ADOPTED' },
+]
+
+const genderOptions = [
+  { label: '公', value: 'MALE' },
+  { label: '母', value: 'FEMALE' },
+  { label: '未知', value: 'UNKNOWN' },
+]
 
 const cats = ref<CatProfile[]>([])
+const loading = ref(false)
+const submitting = ref(false)
+const uploading = ref(false)
 const dialogVisible = ref(false)
+const detailVisible = ref(false)
 const editingId = ref<number>()
-const form = reactive<CatProfile>({ name: '', breed: '', age: undefined, personality: '', healthStatus: '', description: '', status: 'ACTIVE' })
+const currentCat = ref<CatProfile>()
+const form = reactive<CatProfile>(createEmptyForm())
+
+const healthyCount = computed(() => cats.value.filter((cat) => normalizeHealthStatus(cat.healthStatus) === 'HEALTHY').length)
+const activeCount = computed(() => cats.value.filter((cat) => normalizeCatStatus(cat.status) === 'ACTIVE').length)
+
+function createEmptyForm(): CatProfile {
+  return {
+    name: '',
+    breed: '',
+    age: undefined,
+    weight: undefined,
+    gender: 'UNKNOWN',
+    personality: '',
+    interact: '',
+    healthStatus: 'HEALTHY',
+    vaccinium: '',
+    photoUrl: '',
+    description: '',
+    status: 'ACTIVE',
+  }
+}
 
 function resetForm() {
   editingId.value = undefined
-  Object.assign(form, { name: '', breed: '', age: undefined, personality: '', healthStatus: '', description: '', status: 'ACTIVE' })
+  Object.assign(form, createEmptyForm())
 }
 
 async function loadCats() {
+  loading.value = true
   try {
     cats.value = await fetchCats()
   } catch (error) {
     ElMessage.warning(error instanceof Error ? error.message : '猫咪档案接口待接入')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -73,38 +287,344 @@ function openCreateDialog() {
 
 function openEditDialog(row: CatProfile) {
   editingId.value = row.id
-  Object.assign(form, row)
+  Object.assign(form, createEmptyForm(), row, {
+    healthStatus: normalizeHealthStatus(row.healthStatus),
+    status: normalizeCatStatus(row.status),
+  })
   dialogVisible.value = true
 }
 
-async function handleSubmit() {
+async function openDetailDialog(row: CatProfile) {
+  if (!row.id) return
   try {
-    if (editingId.value) await updateCat(editingId.value, form)
-    else await createCat(form)
+    const detail = await fetchCat(row.id)
+    currentCat.value = {
+      ...detail,
+      healthStatus: normalizeHealthStatus(detail.healthStatus),
+      status: normalizeCatStatus(detail.status),
+    }
+    detailVisible.value = true
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '读取猫咪详情失败')
+  }
+}
+
+function beforePhotoUpload(file: File) {
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowedTypes.includes(file.type)) {
+    ElMessage.warning('仅支持 jpg、png、webp、gif 格式的图片')
+    return false
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning('图片大小不能超过 5MB')
+    return false
+  }
+  return true
+}
+
+async function handlePhotoUpload(options: UploadRequestOptions) {
+  uploading.value = true
+  try {
+    const result = await uploadCatPhoto(options.file)
+    form.photoUrl = result.photoUrl
+    ElMessage.success('照片上传成功')
+    options.onSuccess?.(result)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : '照片上传失败'
+    ElMessage.error(message)
+    options.onError?.(new Error(message) as Parameters<NonNullable<typeof options.onError>>[0])
+  } finally {
+    uploading.value = false
+  }
+}
+
+async function handleSubmit() {
+  if (!form.name.trim()) {
+    ElMessage.warning('请填写猫咪名字')
+    return
+  }
+  if (form.weight !== undefined && form.weight !== null && (form.weight < 0.2 || form.weight > 20)) {
+    ElMessage.warning('体重需要在 0.20kg 到 20.00kg 之间')
+    return
+  }
+  submitting.value = true
+  try {
+    const payload: CatProfile = {
+      ...form,
+      healthStatus: normalizeHealthStatus(form.healthStatus),
+      status: normalizeCatStatus(form.status),
+    }
+    if (editingId.value) await updateCat(editingId.value, payload)
+    else await createCat(payload)
     ElMessage.success('保存成功')
     dialogVisible.value = false
     await loadCats()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '保存接口待接入')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function handleHealthChange(row: CatProfile, value: string) {
+  if (!row.id || normalizeHealthStatus(row.healthStatus) === value) return
+  try {
+    await updateCatHealthStatus(row.id, value)
+    ElMessage.success('健康状态已更新')
+    await loadCats()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '健康状态更新失败')
+    await loadCats()
+  }
+}
+
+async function handleToggleStatus(row: CatProfile) {
+  if (!row.id) return
+  const nextStatus = normalizeCatStatus(row.status) === 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'
+  const actionText = nextStatus === 'ACTIVE' ? '启用' : '停用'
+  try {
+    await ElMessageBox.confirm(`确认${actionText}“${row.name}”的猫咪档案吗？`, `${actionText}档案`, { type: 'warning' })
+    await updateCatStatus(row.id, nextStatus)
+    ElMessage.success(`${actionText}成功`)
+    await loadCats()
+  } catch (error) {
+    if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : `${actionText}失败`)
   }
 }
 
 async function handleDelete(id?: number) {
   if (!id) return
   try {
+    await ElMessageBox.confirm('删除后该猫咪档案将不再显示，确认继续吗？', '删除猫咪档案', { type: 'warning' })
     await deleteCat(id)
     ElMessage.success('删除成功')
     await loadCats()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '删除接口待接入')
+    if (error !== 'cancel') ElMessage.error(error instanceof Error ? error.message : '删除接口待接入')
   }
+}
+
+function normalizeHealthStatus(value?: string): CatHealthStatus {
+  if (value === '健康') return 'HEALTHY'
+  if (value === '观察中') return 'OBSERVING'
+  if (value === '治疗中') return 'TREATMENT'
+  if (value === '恢复中') return 'RECOVERING'
+  if (value === 'OBSERVING' || value === 'TREATMENT' || value === 'RECOVERING') return value
+  return 'HEALTHY'
+}
+
+function normalizeCatStatus(value?: string): CatStatus {
+  if (value === 'AVAILABLE') return 'ACTIVE'
+  if (value === 'RESTING' || value === 'OFFLINE') return 'INACTIVE'
+  if (value === 'INACTIVE' || value === 'ADOPTED') return value
+  return 'ACTIVE'
+}
+
+function healthStatusLabel(value?: string) {
+  return healthStatusOptions.find((item) => item.value === normalizeHealthStatus(value))?.label || '待填写'
+}
+
+function statusLabel(value?: string) {
+  return statusOptions.find((item) => item.value === normalizeCatStatus(value))?.label || '待填写'
+}
+
+function genderLabel(value?: string) {
+  return genderOptions.find((item) => item.value === value)?.label || '待填写'
+}
+
+function weightLabel(value?: number) {
+  return value === undefined || value === null ? '待填写' : `${Number(value).toFixed(2)} kg`
+}
+
+function healthTagType(value?: string) {
+  const normalized = normalizeHealthStatus(value)
+  if (normalized === 'HEALTHY') return 'success'
+  if (normalized === 'OBSERVING') return 'warning'
+  if (normalized === 'TREATMENT') return 'danger'
+  if (normalized === 'RECOVERING') return 'info'
+  return 'info'
+}
+
+function statusTagType(value?: string) {
+  const normalized = normalizeCatStatus(value)
+  if (normalized === 'ACTIVE') return 'success'
+  if (normalized === 'INACTIVE') return 'warning'
+  if (normalized === 'ADOPTED') return 'info'
+  return 'info'
 }
 
 onMounted(loadCats)
 </script>
 
 <style scoped>
-.role-page { display: grid; gap: 18px; }
-.page-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
-.eyebrow { margin: 0 0 8px; color: #d97706; font-weight: 800; letter-spacing: 0.08em; }
+.cat-page {
+  --cream: #fff7e8;
+  --paper: rgba(255, 252, 244, 0.92);
+  --ink: #3a2719;
+  --muted: #8c7057;
+  --coffee: #9a5a2c;
+  --caramel: #e3a33a;
+  --peach: #ffdfb9;
+  --line: rgba(154, 90, 44, 0.18);
+  position: relative;
+  display: grid;
+  gap: 18px;
+  padding: 24px;
+  border-radius: 28px;
+  overflow: hidden;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 204, 128, 0.36), transparent 34%),
+    radial-gradient(circle at 92% 12%, rgba(255, 239, 196, 0.72), transparent 32%),
+    linear-gradient(135deg, #fffaf0 0%, #fff2d8 48%, #f8dfb4 100%);
+  box-shadow: 0 24px 70px rgba(95, 55, 23, 0.14);
+}
+
+.cat-page::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(rgba(112, 74, 35, 0.08) 1px, transparent 1px),
+    linear-gradient(120deg, transparent 0 62%, rgba(255, 255, 255, 0.32) 62% 64%, transparent 64%);
+  background-size: 18px 18px, 100% 100%;
+  mix-blend-mode: multiply;
+}
+
+.cat-hero,
+.insight-grid,
+.table-shell { position: relative; z-index: 1; }
+
+.cat-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: center;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(255, 244, 222, 0.72));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 18px 42px rgba(132, 82, 31, 0.12);
+}
+
+.hero-copy h1 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(32px, 4vw, 52px);
+  letter-spacing: -0.05em;
+}
+
+.hero-copy p:last-child { max-width: 620px; margin: 10px 0 0; color: var(--muted); font-size: 15px; }
+.eyebrow { margin: 0 0 8px; color: var(--coffee); font-weight: 900; letter-spacing: 0.12em; font-size: 12px; }
+.hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero-primary { box-shadow: 0 12px 24px rgba(227, 132, 39, 0.28); }
+.soft-button { border-color: var(--line); color: var(--coffee); background: rgba(255, 255, 255, 0.62); }
+
+.insight-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.insight-card {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.68);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(12px);
+}
+
+.insight-icon {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  background: #ffe5b9;
+  font-size: 22px;
+}
+
+.insight-card strong { display: block; font-size: 28px; line-height: 1; }
+.insight-card p { margin: 5px 0 0; color: var(--muted); font-size: 13px; }
+
+.table-shell {
+  padding: 10px;
+  border-radius: 24px;
+  background: var(--paper);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  box-shadow: 0 18px 40px rgba(111, 73, 32, 0.1);
+}
+
+.cat-table :deep(.el-table__inner-wrapper::before) { display: none; }
+.cat-table :deep(.el-table__header th) { background: #fff4dd; color: var(--coffee); font-weight: 800; }
+.cat-table :deep(.el-table__row) { transition: transform 0.18s ease, background 0.18s ease; }
+.cat-table :deep(.el-table__row:hover) { background: #fff9ed; }
+
+.cat-cell { display: flex; gap: 12px; align-items: center; }
+.cat-cell strong { display: block; font-size: 16px; }
+.cat-cell p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+.mini-stack { display: grid; gap: 4px; color: var(--muted); }
+.personality-tag { max-width: 140px; overflow: hidden; text-overflow: ellipsis; }
+.status-select { width: 116px; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.photo-editor {
+  display: grid;
+  grid-template-columns: 136px 1fr;
+  gap: 20px;
+  align-items: center;
+  padding: 18px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: linear-gradient(135deg, #fff8ec, #fff1d9);
+}
+
+.photo-frame {
+  display: grid;
+  place-items: center;
+  width: 136px;
+  height: 136px;
+  border-radius: 28px;
+  background: repeating-linear-gradient(135deg, #ffe9bf 0 10px, #fff5df 10px 20px);
+  box-shadow: inset 0 0 0 1px rgba(154, 90, 44, 0.14);
+}
+
+.photo-editor__content { display: grid; gap: 10px; }
+.photo-editor__content h3 { margin: 0; font-size: 18px; }
+.photo-editor__content p { margin: 4px 0 0; color: var(--muted); }
+.upload-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.form-tip { color: var(--muted); font-size: 13px; }
+.form-section-title { margin: 18px 0 12px; color: var(--coffee); font-weight: 900; letter-spacing: 0.08em; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; }
+.form-grid :deep(.el-select), .form-grid :deep(.el-input-number) { width: 100%; }
+
+.cat-detail { display: grid; gap: 18px; }
+.detail-cover {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 22px;
+  background: linear-gradient(135deg, #fff8ec, #ffe7bd);
+}
+.detail-cover h2 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 30px; }
+.detail-cover p:last-child { margin: 6px 0 0; color: var(--muted); }
+.cat-detail :deep(.el-descriptions) { width: 100%; }
+.cat-dialog :deep(.el-dialog) { border-radius: 24px; overflow: hidden; }
+.cat-dialog :deep(.el-dialog__header) { padding: 22px 24px 10px; }
+.cat-dialog :deep(.el-dialog__body) { padding: 14px 24px 4px; }
+.cat-dialog :deep(.el-dialog__footer) { padding: 14px 24px 24px; }
+
+@media (max-width: 760px) {
+  .cat-page { padding: 16px; }
+  .cat-hero { display: grid; }
+  .insight-grid { grid-template-columns: 1fr; }
+  .photo-editor, .form-grid { grid-template-columns: 1fr; }
+  .photo-frame { width: 100%; }
+}
 </style>
