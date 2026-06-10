@@ -1,43 +1,225 @@
 package com.nekocafe.admin.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.nekocafe.common.exception.BizException;
+import com.nekocafe.store.entity.Store;
+import com.nekocafe.store.entity.UserStoreRole;
+import com.nekocafe.store.mapper.StoreMapper;
+import com.nekocafe.store.mapper.UserStoreRoleMapper;
+import com.nekocafe.user.entity.Role;
+import com.nekocafe.user.entity.User;
+import com.nekocafe.user.entity.UserRole;
+import com.nekocafe.user.mapper.RoleMapper;
+import com.nekocafe.user.mapper.UserMapper;
+import com.nekocafe.user.mapper.UserRoleMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class AdminService {
 
-    public List<AdminUserRow> users() {
-        return List.of(
-            new AdminUserRow(1L, "customer_test", "顾客测试号", "13800000000", "customer@example.com", "ACTIVE", List.of("CUSTOMER")),
-            new AdminUserRow(2L, "staff_test", "店员测试号", "13800000001", "staff@example.com", "ACTIVE", List.of("STAFF")),
-            new AdminUserRow(3L, "hq_ops_test", "总部运营测试号", "13800000002", "hq@example.com", "ACTIVE", List.of("HQ_OPERATOR"))
-        );
+    private static final String STORE_MANAGER = "STORE_MANAGER";
+
+    private final UserMapper userMapper;
+    private final RoleMapper roleMapper;
+    private final UserRoleMapper userRoleMapper;
+    private final StoreMapper storeMapper;
+    private final UserStoreRoleMapper userStoreRoleMapper;
+
+    public AdminService(UserMapper userMapper, RoleMapper roleMapper,
+                        UserRoleMapper userRoleMapper, StoreMapper storeMapper,
+                        UserStoreRoleMapper userStoreRoleMapper) {
+        this.userMapper = userMapper;
+        this.roleMapper = roleMapper;
+        this.userRoleMapper = userRoleMapper;
+        this.storeMapper = storeMapper;
+        this.userStoreRoleMapper = userStoreRoleMapper;
     }
+
+    // ---- users ----
+
+    public List<AdminUserRow> users() {
+        List<User> allUsers = userMapper.selectList(
+                new LambdaQueryWrapper<User>().eq(User::getDeleted, 0).orderByDesc(User::getCreatedAt));
+        if (allUsers.isEmpty()) return List.of();
+
+        List<Long> userIds = allUsers.stream().map(User::getId).toList();
+        List<UserRole> allUserRoles = userRoleMapper.selectList(
+                new LambdaQueryWrapper<UserRole>().in(UserRole::getUserId, userIds));
+        List<Long> roleIds = allUserRoles.stream().map(UserRole::getRoleId).distinct().toList();
+        final Map<Long, String> roleIdToCode;
+        if (!roleIds.isEmpty()) {
+            roleIdToCode = roleMapper.selectBatchIds(roleIds).stream()
+                    .collect(Collectors.toMap(Role::getId, Role::getCode));
+        } else {
+            roleIdToCode = Map.of();
+        }
+
+        Map<Long, List<String>> userRolesMap = allUserRoles.stream()
+                .collect(Collectors.groupingBy(UserRole::getUserId,
+                        Collectors.mapping(ur -> roleIdToCode.getOrDefault(ur.getRoleId(), "UNKNOWN"),
+                                Collectors.toList())));
+
+        return allUsers.stream()
+                .map(u -> new AdminUserRow(u.getId(), u.getUsername(), u.getNickname(),
+                        u.getPhone(), u.getEmail(), u.getStatus(),
+                        userRolesMap.getOrDefault(u.getId(), List.of())))
+                .toList();
+    }
+
+    // ---- roles ----
 
     public List<AdminRoleRow> roles() {
-        return List.of(
-            new AdminRoleRow(1L, "CUSTOMER", "顾客", "预约、点单、支付和查看个人记录"),
-            new AdminRoleRow(2L, "STAFF", "店员", "签到、订单履约和现场服务"),
-            new AdminRoleRow(3L, "STORE_MANAGER", "店长", "门店、桌位和本店经营管理"),
-            new AdminRoleRow(4L, "HQ_OPERATOR", "总部运营", "跨门店数据看板、活动运营、用户角色和平台配置管理"),
-            new AdminRoleRow(5L, "CAT_CARETAKER", "猫咪管家", "猫咪档案和健康状态维护")
-        );
+        return roleMapper.selectList(new LambdaQueryWrapper<Role>().orderByAsc(Role::getId))
+                .stream()
+                .map(r -> new AdminRoleRow(r.getId(), r.getCode(), r.getName(), r.getDescription()))
+                .toList();
     }
+
+    // ---- stores ----
 
     public List<AdminStoreRow> stores() {
-        return List.of(
-            new AdminStoreRow(1L, "NekoCafé 春日店", "杭州", "西湖区猫爪路 18 号", "OPEN"),
-            new AdminStoreRow(2L, "NekoCafé 夏夜店", "上海", "徐汇区绒球街 6 号", "PREPARING")
-        );
+        return storeMapper.selectList(
+                new LambdaQueryWrapper<Store>().eq(Store::getDeleted, 0).orderByAsc(Store::getId))
+                .stream()
+                .map(s -> new AdminStoreRow(s.getId(), s.getName(), s.getCity(), s.getAddress(), s.getStatus()))
+                .toList();
     }
 
-    public record AdminUserRow(Long id, String username, String nickname, String phone, String email, String status, List<String> roles) {
+    // ---- store managers ----
+
+    public List<StoreManagerRow> storeManagers() {
+        List<UserStoreRole> mappings = userStoreRoleMapper.selectList(
+                new LambdaQueryWrapper<UserStoreRole>()
+                        .eq(UserStoreRole::getRoleCode, STORE_MANAGER)
+                        .eq(UserStoreRole::getStatus, "ACTIVE"));
+        if (mappings.isEmpty()) return List.of();
+
+        List<Long> userIds = mappings.stream().map(UserStoreRole::getUserId).distinct().toList();
+        List<Long> storeIds = mappings.stream().map(UserStoreRole::getStoreId).distinct().toList();
+
+        Map<Long, User> userMap = userMapper.selectBatchIds(userIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+        Map<Long, Store> storeMap = storeMapper.selectBatchIds(storeIds).stream()
+                .collect(Collectors.toMap(Store::getId, s -> s));
+
+        return mappings.stream().map(m -> {
+            User user = userMap.get(m.getUserId());
+            Store store = storeMap.get(m.getStoreId());
+            return new StoreManagerRow(
+                    m.getId(), m.getUserId(),
+                    user != null ? user.getUsername() : "未知",
+                    user != null ? user.getNickname() : "未知",
+                    m.getStoreId(),
+                    store != null ? store.getName() : "未知",
+                    m.getStatus(), m.getCreatedAt());
+        }).toList();
     }
 
-    public record AdminRoleRow(Long id, String code, String name, String description) {
+    @Transactional
+    public void assignStoreManager(Long userId, Long storeId, Long createdBy) {
+        // Verify user exists
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getDeleted() == 1) {
+            throw new BizException(4001, "用户不存在");
+        }
+        // Verify store exists
+        Store store = storeMapper.selectOne(
+                new LambdaQueryWrapper<Store>().eq(Store::getId, storeId).eq(Store::getDeleted, 0));
+        if (store == null) {
+            throw new BizException(4002, "门店不存在");
+        }
+
+        // Ensure user has STORE_MANAGER role in user_role table
+        Role managerRole = roleMapper.selectOne(
+                new LambdaQueryWrapper<Role>().eq(Role::getCode, STORE_MANAGER));
+        if (managerRole == null) {
+            throw new BizException(4003, "店长角色未初始化");
+        }
+        Long count = userRoleMapper.selectCount(
+                new LambdaQueryWrapper<UserRole>()
+                        .eq(UserRole::getUserId, userId)
+                        .eq(UserRole::getRoleId, managerRole.getId()));
+        if (count == 0) {
+            UserRole ur = new UserRole();
+            ur.setUserId(userId);
+            ur.setRoleId(managerRole.getId());
+            userRoleMapper.insert(ur);
+        }
+
+        // Check if already assigned to this store
+        UserStoreRole existing = userStoreRoleMapper.selectOne(
+                new LambdaQueryWrapper<UserStoreRole>()
+                        .eq(UserStoreRole::getUserId, userId)
+                        .eq(UserStoreRole::getStoreId, storeId)
+                        .eq(UserStoreRole::getRoleCode, STORE_MANAGER));
+        if (existing != null) {
+            if ("ACTIVE".equals(existing.getStatus())) {
+                throw new BizException(4004, "该用户已是此门店的店长");
+            }
+            // Reactivate
+            existing.setStatus("ACTIVE");
+            existing.setDismissedBy(null);
+            existing.setDismissedAt(null);
+            existing.setDismissReason(null);
+            existing.setCreatedBy(createdBy);
+            userStoreRoleMapper.updateById(existing);
+            return;
+        }
+
+        UserStoreRole usr = new UserStoreRole();
+        usr.setUserId(userId);
+        usr.setStoreId(storeId);
+        usr.setRoleCode(STORE_MANAGER);
+        usr.setStatus("ACTIVE");
+        usr.setCreatedBy(createdBy);
+        userStoreRoleMapper.insert(usr);
     }
 
-    public record AdminStoreRow(Long id, String name, String city, String address, String status) {
+    @Transactional
+    public void removeStoreManager(Long userId, Long storeId, Long dismissedBy) {
+        UserStoreRole existing = userStoreRoleMapper.selectOne(
+                new LambdaQueryWrapper<UserStoreRole>()
+                        .eq(UserStoreRole::getUserId, userId)
+                        .eq(UserStoreRole::getStoreId, storeId)
+                        .eq(UserStoreRole::getRoleCode, STORE_MANAGER));
+        if (existing == null) {
+            throw new BizException(4005, "该用户不是此门店的店长");
+        }
+        existing.setStatus("DISMISSED");
+        existing.setDismissedBy(dismissedBy);
+        existing.setDismissedAt(LocalDateTime.now());
+        userStoreRoleMapper.updateById(existing);
     }
+
+    // ---- user status ----
+
+    @Transactional
+    public void updateUserStatus(Long userId, String status) {
+        User user = userMapper.selectById(userId);
+        if (user == null || user.getDeleted() == 1) {
+            throw new BizException(4001, "用户不存在");
+        }
+        user.setStatus(status);
+        userMapper.updateById(user);
+    }
+
+    // ---- DTOs ----
+
+    public record AdminUserRow(Long id, String username, String nickname, String phone,
+                               String email, String status, List<String> roles) {}
+
+    public record AdminRoleRow(Long id, String code, String name, String description) {}
+
+    public record AdminStoreRow(Long id, String name, String city, String address, String status) {}
+
+    public record StoreManagerRow(Long id, Long userId, String username, String nickname,
+                                  Long storeId, String storeName, String status,
+                                  LocalDateTime createdAt) {}
 }

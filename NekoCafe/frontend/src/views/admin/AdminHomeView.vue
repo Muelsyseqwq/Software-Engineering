@@ -2,75 +2,123 @@
   <section class="page-card role-page">
     <header class="page-header">
       <div>
-        <p class="eyebrow">总部运营 / 总控后台</p>
-        <h1>总控后台</h1>
-        <p>管理用户、角色、门店和系统配置，作为总部运营统一维护平台基础数据的入口。</p>
+        <p class="eyebrow">HQ_OPERATOR / 运营总览</p>
+        <h1>运营总览</h1>
+        <p>查看各门店营收对比与今日平台概览数据。</p>
       </div>
-      <el-button type="primary" @click="loadData">刷新</el-button>
+      <el-button type="primary" @click="loadAll">刷新</el-button>
     </header>
 
-    <el-tabs>
-      <el-tab-pane label="用户列表">
-        <el-table :data="users" border empty-text="暂无用户数据，接口待接入">
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="username" label="用户名" />
-          <el-table-column prop="nickname" label="昵称" />
-          <el-table-column prop="phone" label="手机号" />
-          <el-table-column prop="status" label="状态" />
-          <el-table-column label="角色">
-            <template #default="{ row }">
-              <el-tag v-for="role in row.roles" :key="role" style="margin-right: 6px">{{ role }}</el-tag>
-            </template>
-          </el-table-column>
-        </el-table>
-      </el-tab-pane>
+    <!-- Global summary cards -->
+    <el-row :gutter="16" class="stat-row">
+      <el-col v-for="item in statItems" :key="item.label" :xs="24" :sm="12" :md="8" :lg="4">
+        <el-card>
+          <strong>{{ item.value }}</strong>
+          <span>{{ item.label }}</span>
+        </el-card>
+      </el-col>
+    </el-row>
 
-      <el-tab-pane label="角色列表">
-        <el-table :data="roles" border empty-text="暂无角色数据，接口待接入">
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="code" label="角色编码" />
-          <el-table-column prop="name" label="角色名称" />
-          <el-table-column prop="description" label="说明" />
-        </el-table>
-      </el-tab-pane>
+    <!-- Per-store revenue chart -->
+    <el-card header="各门店今日营收对比">
+      <div ref="storeChartRef" class="chart-box" />
+    </el-card>
 
-      <el-tab-pane label="门店列表">
-        <el-table :data="stores" border empty-text="暂无门店数据，接口待接入">
-          <el-table-column prop="id" label="ID" width="80" />
-          <el-table-column prop="name" label="门店名称" />
-          <el-table-column prop="city" label="城市" />
-          <el-table-column prop="address" label="地址" />
-          <el-table-column prop="status" label="状态" />
-        </el-table>
-      </el-tab-pane>
-    </el-tabs>
+    <!-- Per-store detail table -->
+    <el-card header="各门店今日数据明细">
+      <el-table :data="storeSummaries" border empty-text="暂无门店营收数据">
+        <el-table-column prop="storeName" label="门店" />
+        <el-table-column prop="city" label="城市" width="100" />
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'OPEN' ? 'success' : row.status === 'PREPARING' ? 'warning' : 'info'">
+              {{ row.status === 'OPEN' ? '营业中' : row.status === 'PREPARING' ? '筹备中' : row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="今日营收" width="120">
+          <template #default="{ row }">¥{{ row.revenue }}</template>
+        </el-table-column>
+        <el-table-column prop="orderCount" label="今日订单" width="100" />
+        <el-table-column prop="reservationCount" label="今日预约" width="100" />
+      </el-table>
+    </el-card>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchAdminRoles, fetchAdminStores, fetchAdminUsers, type AdminRoleRow, type AdminStoreRow, type AdminUserRow } from '@/api/admin'
+import * as echarts from 'echarts'
+import { fetchDashboardSummary, fetchStoreSummaries, type DashboardSummary, type StoreSummaryRow } from '@/api/dashboard'
 
-const users = ref<AdminUserRow[]>([])
-const roles = ref<AdminRoleRow[]>([])
-const stores = ref<AdminStoreRow[]>([])
+const summary = ref<DashboardSummary>({ reservationCount: 0, orderCount: 0, revenue: 0, userCount: 0, storeCount: 0, catCount: 0 })
+const storeSummaries = ref<StoreSummaryRow[]>([])
+const storeChartRef = ref<HTMLDivElement | null>(null)
+let storeChart: echarts.ECharts | null = null
 
-async function loadData() {
+const statItems = computed(() => [
+  { label: '今日预约数', value: summary.value.reservationCount },
+  { label: '今日订单数', value: summary.value.orderCount },
+  { label: '今日营业额', value: `¥${summary.value.revenue}` },
+  { label: '注册用户数', value: summary.value.userCount },
+  { label: '门店数量', value: summary.value.storeCount },
+  { label: '猫咪数量', value: summary.value.catCount },
+])
+
+async function loadAll() {
   try {
-    users.value = await fetchAdminUsers()
-    roles.value = await fetchAdminRoles()
-    stores.value = await fetchAdminStores()
-  } catch (error) {
-    ElMessage.warning(error instanceof Error ? error.message : '管理员接口待接入')
+    summary.value = await fetchDashboardSummary()
+    storeSummaries.value = await fetchStoreSummaries()
+    await nextTick()
+    renderChart()
+  } catch (e) {
+    ElMessage.warning(e instanceof Error ? e.message : '加载运营数据失败')
   }
 }
 
-onMounted(loadData)
+function renderChart() {
+  if (!storeChartRef.value) return
+  if (!storeChart) storeChart = echarts.init(storeChartRef.value)
+  storeChart.setOption({
+    tooltip: { trigger: 'axis' },
+    grid: { left: 32, right: 20, top: 20, bottom: 28 },
+    xAxis: {
+      type: 'category',
+      data: storeSummaries.value.map(s => s.storeName),
+      axisLabel: { rotate: 20 },
+    },
+    yAxis: { type: 'value' },
+    series: [{
+      name: '今日营收',
+      type: 'bar',
+      data: storeSummaries.value.map(s => s.revenue),
+      itemStyle: { color: '#d97706' },
+      barMaxWidth: 40,
+    }],
+  })
+}
+
+function resizeChart() { storeChart?.resize() }
+
+onMounted(async () => {
+  await loadAll()
+  window.addEventListener('resize', resizeChart)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeChart)
+  storeChart?.dispose()
+  storeChart = null
+})
 </script>
 
 <style scoped>
 .role-page { display: grid; gap: 18px; }
 .page-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
 .eyebrow { margin: 0 0 8px; color: #d97706; font-weight: 800; letter-spacing: 0.08em; }
+.stat-row :deep(.el-card__body) { display: flex; flex-direction: column; gap: 8px; }
+.stat-row strong { font-size: 26px; color: #3b2618; }
+.stat-row span { color: #7c6554; }
+.chart-box { width: 100%; height: 300px; }
 </style>
