@@ -19,6 +19,10 @@ const router = createRouter({
       path: '/',
       component: AppLayout,
       children: [
+        { path: 'customer', name: 'customer-home', component: () => import('@/views/customer/CustomerHomeView.vue'), meta: { requiresAuth: true, roles: ['CUSTOMER'] } },
+        { path: 'customer/activities', name: 'customer-activities', component: () => import('@/views/customer/CustomerActivitiesView.vue'), meta: { requiresAuth: true, roles: ['CUSTOMER'] } },
+        { path: 'customer/orders', name: 'customer-orders', component: () => import('@/views/customer/MyOrdersView.vue'), meta: { requiresAuth: true, roles: ['CUSTOMER'] } },
+        { path: 'customer/profile', name: 'customer-profile', component: () => import('@/views/customer/CustomerProfileView.vue'), meta: { requiresAuth: true, roles: ['CUSTOMER'] } },
         { path: 'stores', name: 'stores', component: () => import('@/views/store/StoreListView.vue') },
         { path: 'stores/:id', name: 'store-detail', component: () => import('@/views/store/StoreDetailView.vue') },
         { path: 'reservations/new', name: 'reservation-create', component: () => import('@/views/reservation/ReservationCreateView.vue'), meta: { requiresAuth: true, roles: ['CUSTOMER'] } },

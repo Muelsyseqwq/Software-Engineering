@@ -92,7 +92,10 @@
           <p class="eyebrow">MY ORDERS</p>
           <h2>我的最近订单</h2>
         </div>
-        <el-button round @click="loadOrders">刷新</el-button>
+        <div class="history-actions">
+          <el-button round @click="loadOrders">刷新</el-button>
+          <el-button type="primary" round @click="router.push('/customer/orders')">查看订单中心</el-button>
+        </div>
       </div>
       <el-table :data="orders" empty-text="暂无订单，先创建一笔沙箱订单吧">
         <el-table-column prop="orderNo" label="订单号" min-width="180" />
@@ -115,7 +118,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchStoreMenu, type DishItem, type MenuCategory } from '@/api/menu'
 import { fetchStores, type StoreSummary } from '@/api/store'
@@ -123,6 +126,7 @@ import { createOrder, fetchMyOrders, type OrderResponse } from '@/api/order'
 import { sandboxPay, type PaymentResponse } from '@/api/payment'
 
 const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const creating = ref(false)
 const paying = ref(false)
@@ -187,8 +191,8 @@ async function payOrder() {
   paying.value = true
   try {
     payment.value = await sandboxPay(currentOrder.value.id)
-    currentOrder.value = { ...currentOrder.value, status: 'PAID' }
-    ElMessage.success('沙箱支付成功，订单已完成支付')
+    currentOrder.value = { ...currentOrder.value, status: 'PAID', canPay: false }
+    ElMessage.success('沙箱支付成功，可在我的订单查看制作进度')
     await loadOrders()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '沙箱支付失败')
@@ -207,8 +211,10 @@ function getOrderStatusText(status: string) {
     PAID: '已支付，待制作',
     PREPARING: '制作中',
     COMPLETED: '已完成',
+    CANCELLED: '已取消',
+    REFUNDED: '已退款',
   }
-  return statusMap[status] || '状态未知'
+  return statusMap[status] || status
 }
 
 function getOrderStatusTagType(status: string) {
@@ -217,6 +223,8 @@ function getOrderStatusTagType(status: string) {
     PAID: 'primary',
     PREPARING: 'warning',
     COMPLETED: 'success',
+    CANCELLED: 'info',
+    REFUNDED: 'danger',
   }
   return typeMap[status] || 'info'
 }
@@ -266,6 +274,7 @@ onMounted(async () => {
 .result-card.paid { background: rgba(111, 148, 93, 0.12); }
 .result-card.paid strong { color: #537245; }
 .order-history { display: grid; gap: 12px; }
+.history-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
 @media (max-width: 980px) {
   .checkout-grid { grid-template-columns: 1fr; }
   .summary-panel { position: static; }

@@ -13,7 +13,8 @@ export interface CreateOrderRequest {
   remark?: string
 }
 
-export type OrderStatus = 'CREATED' | 'PAID' | 'PREPARING' | 'COMPLETED'
+export type OrderStatus = 'CREATED' | 'PAID' | 'PREPARING' | 'COMPLETED' | 'CANCELLED'
+export type RefundStatus = 'NONE' | 'APPLIED' | 'APPROVED' | 'REJECTED' | 'REFUNDED'
 
 export interface OrderItemResponse {
   id: number
@@ -32,8 +33,16 @@ export interface OrderResponse {
   reservationId?: number
   totalAmount: number
   status: OrderStatus | string
+  refundStatus?: RefundStatus | string
   remark?: string
+  paidAt?: string
+  completedAt?: string
+  cancelledAt?: string
   createdAt: string
+  canPay?: boolean
+  canRefund?: boolean
+  canReview?: boolean
+  reviewed?: boolean
   items: OrderItemResponse[]
 }
 

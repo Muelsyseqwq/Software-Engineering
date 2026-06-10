@@ -2,6 +2,8 @@ package com.nekocafe.order.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nekocafe.common.exception.BizException;
+import com.nekocafe.customer.entity.Review;
+import com.nekocafe.customer.mapper.ReviewMapper;
 import com.nekocafe.menu.entity.Dish;
 import com.nekocafe.menu.mapper.DishMapper;
 import com.nekocafe.order.entity.FoodOrder;
@@ -28,25 +30,31 @@ public class OrderService {
     private static final String ON_SHELF = "ON_SHELF";
     private static final String CREATED = "CREATED";
     private static final String PAID = "PAID";
+    private static final String PREPARING = "PREPARING";
+    private static final String COMPLETED = "COMPLETED";
+    private static final String NONE = "NONE";
 
     private final FoodOrderMapper orderMapper;
     private final FoodOrderItemMapper orderItemMapper;
     private final DishMapper dishMapper;
     private final StoreMapper storeMapper;
     private final ReservationMapper reservationMapper;
+    private final ReviewMapper reviewMapper;
 
     public OrderService(
         FoodOrderMapper orderMapper,
         FoodOrderItemMapper orderItemMapper,
         DishMapper dishMapper,
         StoreMapper storeMapper,
-        ReservationMapper reservationMapper
+        ReservationMapper reservationMapper,
+        ReviewMapper reviewMapper
     ) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.dishMapper = dishMapper;
         this.storeMapper = storeMapper;
         this.reservationMapper = reservationMapper;
+        this.reviewMapper = reviewMapper;
     }
 
     @Transactional
@@ -97,6 +105,7 @@ public class OrderService {
         order.setReservationId(request.reservationId());
         order.setTotalAmount(total);
         order.setStatus(CREATED);
+        order.setRefundStatus(NONE);
         order.setRemark(normalizeOptional(request.remark()));
         orderMapper.insert(order);
 
@@ -147,6 +156,9 @@ public class OrderService {
     @Transactional
     public OrderResponse markPaid(FoodOrder order) {
         order.setStatus(PAID);
+        if (order.getPaidAt() == null) {
+            order.setPaidAt(LocalDateTime.now());
+        }
         orderMapper.updateById(order);
         return toResponse(order, storeMapper.selectById(order.getStoreId()), loadItems(order.getId()));
     }
@@ -161,6 +173,8 @@ public class OrderService {
     }
 
     private OrderResponse toResponse(FoodOrder order, Store store, List<OrderItemResponse> items) {
+        boolean reviewed = hasReview(order.getUserId(), order.getId());
+        String refundStatus = normalizeRefundStatus(order.getRefundStatus());
         return new OrderResponse(
             order.getId(),
             order.getOrderNo(),
@@ -169,10 +183,33 @@ public class OrderService {
             order.getReservationId(),
             order.getTotalAmount(),
             order.getStatus(),
+            refundStatus,
             order.getRemark(),
+            order.getPaidAt(),
+            order.getCompletedAt(),
+            order.getCancelledAt(),
             order.getCreatedAt(),
+            CREATED.equals(order.getStatus()),
+            (PAID.equals(order.getStatus()) || PREPARING.equals(order.getStatus())) && NONE.equals(refundStatus),
+            COMPLETED.equals(order.getStatus()) && !reviewed,
+            reviewed,
             items
         );
+    }
+
+    private boolean hasReview(Long userId, Long orderId) {
+        if (userId == null || orderId == null) {
+            return false;
+        }
+        return reviewMapper.selectCount(new LambdaQueryWrapper<Review>()
+            .eq(Review::getUserId, userId)
+            .eq(Review::getOrderId, orderId)
+            .eq(Review::getDeleted, 0)) > 0;
+    }
+
+    private String normalizeRefundStatus(String status) {
+        String normalized = normalizeOptional(status);
+        return normalized == null ? NONE : normalized.toUpperCase();
     }
 
     private void validateCreateRequest(CreateOrderRequest request) {
@@ -215,8 +252,16 @@ public class OrderService {
         Long reservationId,
         BigDecimal totalAmount,
         String status,
+        String refundStatus,
         String remark,
+        LocalDateTime paidAt,
+        LocalDateTime completedAt,
+        LocalDateTime cancelledAt,
         LocalDateTime createdAt,
+        boolean canPay,
+        boolean canRefund,
+        boolean canReview,
+        boolean reviewed,
         List<OrderItemResponse> items
     ) {
     }
