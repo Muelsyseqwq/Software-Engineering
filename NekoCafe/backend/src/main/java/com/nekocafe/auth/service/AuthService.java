@@ -6,6 +6,8 @@ import com.nekocafe.auth.dto.AuthUserResponse;
 import com.nekocafe.auth.dto.LoginRequest;
 import com.nekocafe.auth.dto.RegisterRequest;
 import com.nekocafe.common.exception.BizException;
+import com.nekocafe.customer.entity.UserPreference;
+import com.nekocafe.customer.mapper.UserPreferenceMapper;
 import com.nekocafe.security.AuthPrincipal;
 import com.nekocafe.security.JwtService;
 import com.nekocafe.user.entity.MemberAccount;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
@@ -34,6 +37,7 @@ public class AuthService {
     private final RoleMapper roleMapper;
     private final UserRoleMapper userRoleMapper;
     private final MemberAccountMapper memberAccountMapper;
+    private final UserPreferenceMapper userPreferenceMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -42,6 +46,7 @@ public class AuthService {
         RoleMapper roleMapper,
         UserRoleMapper userRoleMapper,
         MemberAccountMapper memberAccountMapper,
+        UserPreferenceMapper userPreferenceMapper,
         PasswordEncoder passwordEncoder,
         JwtService jwtService
     ) {
@@ -49,6 +54,7 @@ public class AuthService {
         this.roleMapper = roleMapper;
         this.userRoleMapper = userRoleMapper;
         this.memberAccountMapper = memberAccountMapper;
+        this.userPreferenceMapper = userPreferenceMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -94,6 +100,8 @@ public class AuthService {
         memberAccount.setTotalSpent(BigDecimal.ZERO);
         memberAccountMapper.insert(memberAccount);
 
+        saveInitialPreferences(user.getId(), request.preferences());
+
         return buildAuthResponse(user, List.of(CUSTOMER));
     }
 
@@ -128,6 +136,35 @@ public class AuthService {
             throw new BizException(401, "请先登录");
         }
         return toUserResponse(user, loadRoleCodes(user.getId()));
+    }
+
+    private void saveInitialPreferences(Long userId, List<RegisterRequest.PreferenceRequest> preferences) {
+        for (RegisterRequest.PreferenceRequest request : normalizePreferences(preferences)) {
+            UserPreference preference = new UserPreference();
+            preference.setUserId(userId);
+            preference.setPreferenceType(request.preferenceType());
+            preference.setPreferenceValue(request.preferenceValue());
+            userPreferenceMapper.insert(preference);
+        }
+    }
+
+    private List<RegisterRequest.PreferenceRequest> normalizePreferences(List<RegisterRequest.PreferenceRequest> preferences) {
+        if (preferences == null) {
+            return List.of();
+        }
+        List<RegisterRequest.PreferenceRequest> result = new ArrayList<>();
+        for (RegisterRequest.PreferenceRequest request : preferences) {
+            if (request == null) continue;
+            String type = normalizeOptional(request.preferenceType());
+            String value = normalizeOptional(request.preferenceValue());
+            if (type == null || value == null) continue;
+            RegisterRequest.PreferenceRequest normalized = new RegisterRequest.PreferenceRequest(type.toUpperCase(), limitText(value, 128));
+            if (result.stream().noneMatch(item -> Objects.equals(item.preferenceType(), normalized.preferenceType())
+                && Objects.equals(item.preferenceValue(), normalized.preferenceValue()))) {
+                result.add(normalized);
+            }
+        }
+        return result;
     }
 
     private AuthResponse buildAuthResponse(User user, List<String> roles) {
@@ -175,5 +212,12 @@ public class AuthService {
     private String normalizeOptional(String value) {
         String normalized = value == null ? "" : value.trim();
         return normalized.isEmpty() ? null : normalized;
+    }
+
+    private String limitText(String value, int maxLength) {
+        if (value == null || value.length() <= maxLength) {
+            return value;
+        }
+        return value.substring(0, maxLength);
     }
 }

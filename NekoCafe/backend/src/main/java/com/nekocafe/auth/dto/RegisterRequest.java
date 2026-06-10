@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
+import java.util.List;
+
 public record RegisterRequest(
     @NotBlank(message = "用户名不能为空")
     @Pattern(regexp = "^[A-Za-z0-9_]{3,32}$", message = "用户名需为 3-32 位字母、数字或下划线")
@@ -23,6 +25,10 @@ public record RegisterRequest(
 
     @Email(message = "邮箱格式不正确")
     @Size(max = 128, message = "邮箱不能超过 128 位")
-    String email
+    String email,
+
+    List<PreferenceRequest> preferences
 ) {
+    public record PreferenceRequest(String preferenceType, String preferenceValue) {
+    }
 }

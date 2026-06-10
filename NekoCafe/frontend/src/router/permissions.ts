@@ -10,7 +10,7 @@ export interface AppMenuItem {
 }
 
 export const ROLE_HOME_MAP: Record<RoleCode, string> = {
-  CUSTOMER: '/stores',
+  CUSTOMER: '/customer',
   STAFF: '/staff',
   CAT_CARETAKER: '/cats',
   STORE_MANAGER: '/manager',
@@ -22,11 +22,15 @@ const ROLE_PRIORITY: RoleCode[] = ['ADMIN', 'HQ_OPERATOR', 'STORE_MANAGER', 'STA
 
 export const APP_MENU_ITEMS: AppMenuItem[] = [
   // Customer
+  { path: '/customer', label: '顾客首页', icon: '🐱', hint: '会员积分与活动总览', roles: ['CUSTOMER'] },
   { path: '/stores', label: '门店浏览', icon: '☕', hint: '寻找今日猫咖座位', roles: ['CUSTOMER'], guest: true },
+  { path: '/customer/activities', label: '活动中心', icon: '🎉', hint: '优惠与娱乐活动', roles: ['CUSTOMER'] },
   { path: '/reservations/new', label: '创建预约', icon: '🐾', hint: '锁定互动时段', roles: ['CUSTOMER'] },
   { path: '/reservations/me', label: '我的预约', icon: '📒', hint: '查看猫爪行程', roles: ['CUSTOMER'] },
   { path: '/menu', label: '菜品点单', icon: '🍰', hint: '甜品饮品提前选', roles: ['CUSTOMER'], guest: true },
   { path: '/orders/checkout', label: '订单结算', icon: '🧾', hint: '确认订单与支付', roles: ['CUSTOMER'] },
+  { path: '/customer/orders', label: '我的订单', icon: '📦', hint: '支付、退款与评价', roles: ['CUSTOMER'] },
+  { path: '/customer/profile', label: '会员偏好', icon: '🎫', hint: '积分流水与喜好标签', roles: ['CUSTOMER'] },
   // Staff
   { path: '/staff', label: '店员后台', icon: '🛎️', hint: '前台值班总览', roles: ['STAFF'] },
   { path: '/staff/check-in', label: '预约签到', icon: '✅', hint: '核销到店顾客', roles: ['STAFF'] },

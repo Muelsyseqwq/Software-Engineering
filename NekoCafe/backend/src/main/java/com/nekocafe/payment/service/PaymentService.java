@@ -2,6 +2,7 @@ package com.nekocafe.payment.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nekocafe.common.exception.BizException;
+import com.nekocafe.customer.service.CustomerService;
 import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.service.OrderService;
 import com.nekocafe.payment.entity.PaymentRecord;
@@ -22,10 +23,12 @@ public class PaymentService {
 
     private final PaymentRecordMapper paymentRecordMapper;
     private final OrderService orderService;
+    private final CustomerService customerService;
 
-    public PaymentService(PaymentRecordMapper paymentRecordMapper, OrderService orderService) {
+    public PaymentService(PaymentRecordMapper paymentRecordMapper, OrderService orderService, CustomerService customerService) {
         this.paymentRecordMapper = paymentRecordMapper;
         this.orderService = orderService;
+        this.customerService = customerService;
     }
 
     @Transactional
@@ -41,6 +44,7 @@ public class PaymentService {
                 .orderByDesc(PaymentRecord::getId)
                 .last("LIMIT 1"));
             if (existing != null) {
+                customerService.awardPointsForPaidOrder(order);
                 return toResponse(existing);
             }
         }
@@ -53,6 +57,7 @@ public class PaymentService {
             .eq(PaymentRecord::getIdempotencyKey, key)
             .last("LIMIT 1"));
         if (existingByKey != null) {
+            customerService.awardPointsForPaidOrder(order);
             return toResponse(existingByKey);
         }
 
@@ -66,6 +71,7 @@ public class PaymentService {
         record.setPaidAt(LocalDateTime.now());
         paymentRecordMapper.insert(record);
         orderService.markPaid(order);
+        customerService.awardPointsForPaidOrder(order);
         return toResponse(record);
     }
 

@@ -54,6 +54,21 @@
             </el-form-item>
           </div>
 
+          <section class="preference-panel">
+            <div class="preference-heading">
+              <span class="mini-pill">个性化推荐</span>
+              <p>选择你的口味、座位和猫咪互动偏好，后续点单和活动推荐会优先参考。</p>
+            </div>
+            <div v-for="group in preferenceGroups" :key="group.type" class="preference-group">
+              <strong>{{ group.label }}</strong>
+              <el-checkbox-group v-model="selectedPreferences[group.type]">
+                <el-checkbox-button v-for="item in group.items" :key="item" :label="item">
+                  {{ item }}
+                </el-checkbox-button>
+              </el-checkbox-group>
+            </div>
+          </section>
+
           <el-form-item prop="agreement" class="agreement-item">
             <el-checkbox v-model="form.agreement">
               我同意开通猫爪会员账户，并遵守 NekoCafé 预约规则
@@ -99,6 +114,15 @@ const form = reactive({
   confirmPassword: '',
   agreement: false,
 })
+
+const preferenceGroups = [
+  { type: 'TASTE', label: '口味偏好', items: ['少糖', '少冰', '咖啡', '甜品', '茶饮'] },
+  { type: 'CAT', label: '猫咪互动', items: ['安静猫咪', '活泼猫咪', '短毛猫', '长毛猫'] },
+  { type: 'SEAT', label: '座位偏好', items: ['靠窗', '安静角落', '适合拍照'] },
+  { type: 'ALLERGY', label: '注意事项', items: ['猫毛敏感', '乳制品', '坚果'] },
+]
+
+const selectedPreferences = reactive<Record<string, string[]>>({ TASTE: [], CAT: [], SEAT: [], ALLERGY: [] })
 
 const rules: FormRules<typeof form> = {
   username: [
@@ -148,6 +172,9 @@ async function submit() {
         nickname: form.nickname,
         phone: form.phone || undefined,
         email: form.email || undefined,
+        preferences: Object.entries(selectedPreferences).flatMap(([preferenceType, values]) =>
+          values.map((preferenceValue) => ({ preferenceType, preferenceValue })),
+        ),
       })
       auth.setAuth(data)
       ElMessage.success('猫爪会员卡已开通，欢迎加入 NekoCafé')
@@ -272,6 +299,30 @@ async function submit() {
   border-radius: 16px;
   padding: 4px 14px;
   box-shadow: 0 0 0 1px rgba(217, 119, 6, 0.12) inset;
+}
+.preference-panel {
+  margin: 6px 0 18px;
+  border-radius: 22px;
+  padding: 18px;
+  background: rgba(255, 240, 220, 0.62);
+}
+.preference-heading p {
+  margin: 10px 0 16px;
+  color: rgba(59, 38, 24, 0.62);
+  line-height: 1.7;
+}
+.preference-group {
+  margin-top: 14px;
+}
+.preference-group strong {
+  display: block;
+  margin-bottom: 10px;
+  color: #3b2618;
+}
+.preference-group :deep(.el-checkbox-button__inner) {
+  border-radius: 999px;
+  margin: 0 8px 8px 0;
+  border-left: 1px solid var(--el-border-color);
 }
 .agreement-item {
   margin-top: 4px;
