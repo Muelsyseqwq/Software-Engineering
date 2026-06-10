@@ -6,8 +6,7 @@ import com.nekocafe.cat.dto.CatResponse;
 import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
-import com.nekocafe.user.entity.UserStoreRole;
-import com.nekocafe.user.mapper.UserStoreRoleMapper;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -24,11 +23,11 @@ public class CatService {
     private static final Set<String> CAT_STATUSES = Set.of("ACTIVE", "INACTIVE", "ADOPTED");
 
     private final CatMapper catMapper;
-    private final UserStoreRoleMapper userStoreRoleMapper;
+    private final JdbcTemplate jdbcTemplate;
 
-    public CatService(CatMapper catMapper, UserStoreRoleMapper userStoreRoleMapper) {
+    public CatService(CatMapper catMapper, JdbcTemplate jdbcTemplate) {
         this.catMapper = catMapper;
-        this.userStoreRoleMapper = userStoreRoleMapper;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     public List<CatResponse> listCats(Long caretakerId) {
@@ -123,15 +122,16 @@ public class CatService {
     }
 
     private List<Long> resolveStoreIds(Long caretakerId) {
-        LambdaQueryWrapper<UserStoreRole> wrapper = new LambdaQueryWrapper<UserStoreRole>()
-            .eq(UserStoreRole::getUserId, caretakerId)
-            .eq(UserStoreRole::getStatus, "ACTIVE")
-            .eq(UserStoreRole::getRoleCode, "CAT_CARETAKER");
-        List<UserStoreRole> roles = userStoreRoleMapper.selectList(wrapper);
-        if (roles.isEmpty()) {
+        if (caretakerId == null) {
             return Collections.emptyList();
         }
-        return roles.stream().map(UserStoreRole::getStoreId).distinct().toList();
+        return jdbcTemplate.queryForList(
+            "SELECT DISTINCT store_id FROM user_store_role WHERE user_id = ? AND role_code = ? AND status = ?",
+            Long.class,
+            caretakerId,
+            "CAT_CARETAKER",
+            "ACTIVE"
+        );
     }
 
     private String requiredName(String name) {
