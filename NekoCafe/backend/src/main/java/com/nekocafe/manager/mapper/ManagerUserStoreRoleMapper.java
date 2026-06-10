@@ -5,5 +5,5 @@ import com.nekocafe.manager.entity.UserStoreRole;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
-public interface UserStoreRoleMapper extends BaseMapper<UserStoreRole> {
+public interface ManagerUserStoreRoleMapper extends BaseMapper<UserStoreRole> {
 }

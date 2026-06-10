@@ -72,7 +72,7 @@ public class StoreManagerService {
     private static final Set<String> ACTIVITY_DECISIONS = Set.of("ACCEPTED", "REJECTED");
     private static final DateTimeFormatter SLOT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
-    private final UserStoreRoleMapper userStoreRoleMapper;
+    private final ManagerUserStoreRoleMapper userStoreRoleMapper;
     private final StoreMapper storeMapper;
     private final DiningTableMapper diningTableMapper;
     private final ReservationMapper reservationMapper;
@@ -83,13 +83,13 @@ public class StoreManagerService {
     private final CatMapper catMapper;
     private final StaffShiftMapper staffShiftMapper;
     private final StaffLeaveRequestMapper staffLeaveRequestMapper;
-    private final PromotionActivityMapper promotionActivityMapper;
-    private final ActivityStoreMapper activityStoreMapper;
+    private final ManagerPromotionActivityMapper promotionActivityMapper;
+    private final ManagerActivityStoreMapper activityStoreMapper;
     private final DishMapper dishMapper;
     private final DishPriceHistoryMapper dishPriceHistoryMapper;
 
     public StoreManagerService(
-        UserStoreRoleMapper userStoreRoleMapper,
+        ManagerUserStoreRoleMapper userStoreRoleMapper,
         StoreMapper storeMapper,
         DiningTableMapper diningTableMapper,
         ReservationMapper reservationMapper,
@@ -100,8 +100,8 @@ public class StoreManagerService {
         CatMapper catMapper,
         StaffShiftMapper staffShiftMapper,
         StaffLeaveRequestMapper staffLeaveRequestMapper,
-        PromotionActivityMapper promotionActivityMapper,
-        ActivityStoreMapper activityStoreMapper,
+        ManagerPromotionActivityMapper promotionActivityMapper,
+        ManagerActivityStoreMapper activityStoreMapper,
         DishMapper dishMapper,
         DishPriceHistoryMapper dishPriceHistoryMapper
     ) {
