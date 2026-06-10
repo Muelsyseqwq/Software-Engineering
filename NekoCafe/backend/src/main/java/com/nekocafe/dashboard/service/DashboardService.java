@@ -51,21 +51,18 @@ public class DashboardService {
     }
 
     public DashboardSummary summary() {
-        // Count today's reservations (non-deleted)
         long reservationCount = reservationMapper.selectCount(
                 new LambdaQueryWrapper<Reservation>()
                         .eq(Reservation::getDeleted, 0)
                         .apply("DATE(created_at) = CURDATE()")
         );
 
-        // Count today's orders (non-deleted)
         long orderCount = foodOrderMapper.selectCount(
                 new LambdaQueryWrapper<FoodOrder>()
                         .eq(FoodOrder::getDeleted, 0)
                         .apply("DATE(created_at) = CURDATE()")
         );
 
-        // Sum today's revenue from successful payment records
         QueryWrapper<PaymentRecord> revenueWrapper = new QueryWrapper<>();
         revenueWrapper.select("COALESCE(SUM(amount), 0) AS total")
                 .eq("status", "SUCCESS")
@@ -81,17 +78,14 @@ public class DashboardService {
             }
         }
 
-        // Count total users (non-deleted)
         long userCount = userMapper.selectCount(
                 new LambdaQueryWrapper<User>().eq(User::getDeleted, 0)
         );
 
-        // Count total stores (non-deleted)
         long storeCount = storeMapper.selectCount(
                 new LambdaQueryWrapper<Store>().eq(Store::getDeleted, 0)
         );
 
-        // Count cats (table may not exist yet, fall back to 0)
         long catCount = 0;
         try {
             catCount = catMapper.selectCount(
@@ -115,7 +109,6 @@ public class DashboardService {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(6);
 
-        // Query payment records for last 7 days grouped by date
         QueryWrapper<PaymentRecord> wrapper = new QueryWrapper<>();
         wrapper.select("DATE(paid_at) AS stat_date, COALESCE(SUM(amount), 0) AS total")
                 .eq("status", "SUCCESS")
@@ -124,42 +117,13 @@ public class DashboardService {
                 .orderByAsc("stat_date");
         List<Map<String, Object>> maps = paymentRecordMapper.selectMaps(wrapper);
 
-        // Build date -> value map
-        BigDecimal[] values = new BigDecimal[7];
-        for (int i = 0; i < 7; i++) {
-            values[i] = BigDecimal.ZERO;
-        }
-        for (Map<String, Object> row : maps) {
-            if (row.get("stat_date") instanceof java.sql.Date sqlDate) {
-                LocalDate date = sqlDate.toLocalDate();
-                int idx = (int) (date.toEpochDay() - start.toEpochDay());
-                if (idx >= 0 && idx < 7) {
-                    Object total = row.get("total");
-                    if (total instanceof BigDecimal bd) {
-                        values[idx] = bd;
-                    } else if (total instanceof Number n) {
-                        values[idx] = BigDecimal.valueOf(n.doubleValue());
-                    }
-                }
-            }
-        }
-
-        // Build result with Chinese weekday labels
-        List<DashboardTrendPoint> result = new ArrayList<>();
-        for (int i = 0; i < 7; i++) {
-            LocalDate date = start.plusDays(i);
-            DayOfWeek dow = date.getDayOfWeek();
-            String label = dow.getDisplayName(TextStyle.SHORT, Locale.CHINESE);
-            result.add(new DashboardTrendPoint(label, values[i].intValue()));
-        }
-        return result;
+        return buildTrend(start, maps, "stat_date", "total", true);
     }
 
     public List<DashboardTrendPoint> reservations() {
         LocalDate end = LocalDate.now();
         LocalDate start = end.minusDays(6);
 
-        // Query reservations for last 7 days grouped by date
         QueryWrapper<Reservation> wrapper = new QueryWrapper<>();
         wrapper.select("DATE(created_at) AS stat_date, COUNT(*) AS cnt")
                 .eq("deleted", 0)
@@ -168,36 +132,132 @@ public class DashboardService {
                 .orderByAsc("stat_date");
         List<Map<String, Object>> maps = reservationMapper.selectMaps(wrapper);
 
-        // Build date -> value map
-        int[] values = new int[7];
+        return buildTrend(start, maps, "stat_date", "cnt", false);
+    }
+
+    // ---- store-level summaries ----
+
+    public List<StoreSummaryRow> storeSummaries() {
+        // Per-store revenue via JOIN payment_record + food_order
+        List<Map<String, Object>> revenueRows = paymentRecordMapper.selectStoreRevenueToday();
+
+        // Per-store order count today
+        QueryWrapper<FoodOrder> orderWrapper = new QueryWrapper<>();
+        orderWrapper.select("store_id, COUNT(*) AS cnt")
+                .eq("deleted", 0)
+                .apply("DATE(created_at) = CURDATE()")
+                .groupBy("store_id");
+        List<Map<String, Object>> orderRows = foodOrderMapper.selectMaps(orderWrapper);
+
+        // Per-store reservation count today
+        QueryWrapper<Reservation> resvWrapper = new QueryWrapper<>();
+        resvWrapper.select("store_id, COUNT(*) AS cnt")
+                .eq("deleted", 0)
+                .apply("DATE(created_at) = CURDATE()")
+                .groupBy("store_id");
+        List<Map<String, Object>> resvRows = reservationMapper.selectMaps(resvWrapper);
+
+        // Build maps
+        Map<Long, BigDecimal> revMap = buildLongBigDecimalMap(revenueRows);
+        Map<Long, Integer> orderCntMap = buildLongIntMap(orderRows);
+        Map<Long, Integer> resvCntMap = buildLongIntMap(resvRows);
+
+        // All non-deleted stores
+        List<Store> stores = storeMapper.selectList(
+                new LambdaQueryWrapper<Store>().eq(Store::getDeleted, 0).orderByAsc(Store::getId));
+
+        return stores.stream().map(s -> {
+            long sid = s.getId();
+            return new StoreSummaryRow(sid, s.getName(), s.getCity(), s.getStatus(),
+                    revMap.getOrDefault(sid, BigDecimal.ZERO),
+                    orderCntMap.getOrDefault(sid, 0),
+                    resvCntMap.getOrDefault(sid, 0));
+        }).toList();
+    }
+
+    public List<DashboardTrendPoint> storeRevenue(Long storeId) {
+        LocalDate end = LocalDate.now();
+        LocalDate start = end.minusDays(6);
+
+        List<Map<String, Object>> maps = paymentRecordMapper.selectStoreRevenueByDateRange(
+                storeId, start.toString(), end.toString());
+
+        return buildTrend(start, maps, "stat_date", "total", true);
+    }
+
+    // ---- helpers ----
+
+    private List<DashboardTrendPoint> buildTrend(LocalDate start,
+                                                  List<Map<String, Object>> maps,
+                                                  String dateKey, String valueKey,
+                                                  boolean asInt) {
+        List<DashboardTrendPoint> result = new ArrayList<>();
+        java.math.BigDecimal[] valuesArr = new java.math.BigDecimal[7];
+        int[] intArr = new int[7];
         for (Map<String, Object> row : maps) {
-            if (row.get("stat_date") instanceof java.sql.Date sqlDate) {
-                LocalDate date = sqlDate.toLocalDate();
-                int idx = (int) (date.toEpochDay() - start.toEpochDay());
-                if (idx >= 0 && idx < 7) {
-                    Object cnt = row.get("cnt");
-                    if (cnt instanceof Number n) {
-                        values[idx] = n.intValue();
-                    }
+            LocalDate date = null;
+            if (row.get(dateKey) instanceof java.sql.Date sqlDate) {
+                date = sqlDate.toLocalDate();
+            }
+            if (date == null) continue;
+            int idx = (int) (date.toEpochDay() - start.toEpochDay());
+            if (idx >= 0 && idx < 7) {
+                Object val = row.get(valueKey);
+                if (asInt) {
+                    if (val instanceof java.math.BigDecimal bd) valuesArr[idx] = bd;
+                    else if (val instanceof Number n)
+                        valuesArr[idx] = java.math.BigDecimal.valueOf(n.doubleValue());
+                    if (valuesArr[idx] == null) valuesArr[idx] = java.math.BigDecimal.ZERO;
+                } else {
+                    if (val instanceof Number n) intArr[idx] = n.intValue();
                 }
             }
         }
-
-        // Build result with Chinese weekday labels
-        List<DashboardTrendPoint> result = new ArrayList<>();
         for (int i = 0; i < 7; i++) {
             LocalDate date = start.plusDays(i);
             DayOfWeek dow = date.getDayOfWeek();
             String label = dow.getDisplayName(TextStyle.SHORT, Locale.CHINESE);
-            result.add(new DashboardTrendPoint(label, values[i]));
+            if (asInt) {
+                BigDecimal bd = valuesArr[i] != null ? valuesArr[i] : BigDecimal.ZERO;
+                result.add(new DashboardTrendPoint(label, bd.intValue()));
+            } else {
+                result.add(new DashboardTrendPoint(label, intArr[i]));
+            }
         }
         return result;
     }
 
-    public record DashboardSummary(int reservationCount, int orderCount, BigDecimal revenue, int userCount,
-                                   int storeCount, int catCount) {
+    private Map<Long, BigDecimal> buildLongBigDecimalMap(List<Map<String, Object>> rows) {
+        return rows.stream()
+                .filter(row -> row.get("store_id") instanceof Number)
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> ((Number) row.get("store_id")).longValue(),
+                        row -> {
+                            Object total = row.get("total");
+                            if (total instanceof BigDecimal bd) return bd;
+                            if (total instanceof Number n)
+                                return BigDecimal.valueOf(n.doubleValue());
+                            return BigDecimal.ZERO;
+                        },
+                        (a, b) -> a));
     }
 
-    public record DashboardTrendPoint(String label, int value) {
+    private Map<Long, Integer> buildLongIntMap(List<Map<String, Object>> rows) {
+        return rows.stream()
+                .filter(row -> row.get("store_id") instanceof Number)
+                .collect(java.util.stream.Collectors.toMap(
+                        row -> ((Number) row.get("store_id")).longValue(),
+                        row -> row.get("cnt") instanceof Number n ? n.intValue() : 0,
+                        (a, b) -> a));
     }
+
+    // ---- DTOs ----
+
+    public record DashboardSummary(int reservationCount, int orderCount, BigDecimal revenue,
+                                   int userCount, int storeCount, int catCount) {}
+
+    public record DashboardTrendPoint(String label, int value) {}
+
+    public record StoreSummaryRow(Long storeId, String storeName, String city, String status,
+                                  BigDecimal revenue, int orderCount, int reservationCount) {}
 }

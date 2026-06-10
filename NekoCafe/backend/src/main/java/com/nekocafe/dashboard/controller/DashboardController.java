@@ -4,10 +4,9 @@ import com.nekocafe.common.result.ApiResult;
 import com.nekocafe.dashboard.service.DashboardService;
 import com.nekocafe.dashboard.service.DashboardService.DashboardSummary;
 import com.nekocafe.dashboard.service.DashboardService.DashboardTrendPoint;
+import com.nekocafe.dashboard.service.DashboardService.StoreSummaryRow;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -35,5 +34,15 @@ public class DashboardController {
     @GetMapping("/reservations")
     public ApiResult<List<DashboardTrendPoint>> reservations() {
         return ApiResult.ok(dashboardService.reservations());
+    }
+
+    @GetMapping("/store-summary")
+    public ApiResult<List<StoreSummaryRow>> storeSummary() {
+        return ApiResult.ok(dashboardService.storeSummaries());
+    }
+
+    @GetMapping("/store/{storeId}/revenue")
+    public ApiResult<List<DashboardTrendPoint>> storeRevenue(@PathVariable Long storeId) {
+        return ApiResult.ok(dashboardService.storeRevenue(storeId));
     }
 }

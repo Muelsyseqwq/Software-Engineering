@@ -18,8 +18,8 @@ import com.nekocafe.store.entity.DiningTable;
 import com.nekocafe.store.entity.DiningTableStatusLog;
 import com.nekocafe.store.mapper.DiningTableMapper;
 import com.nekocafe.store.mapper.DiningTableStatusLogMapper;
-import com.nekocafe.user.entity.UserStoreRole;
-import com.nekocafe.user.mapper.UserStoreRoleMapper;
+import com.nekocafe.store.entity.UserStoreRole;
+import com.nekocafe.store.mapper.UserStoreRoleMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 

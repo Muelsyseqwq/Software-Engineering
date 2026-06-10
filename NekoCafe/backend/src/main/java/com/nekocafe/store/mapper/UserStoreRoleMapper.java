@@ -1,7 +1,7 @@
-package com.nekocafe.user.mapper;
+package com.nekocafe.store.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
-import com.nekocafe.user.entity.UserStoreRole;
+import com.nekocafe.store.entity.UserStoreRole;
 import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
