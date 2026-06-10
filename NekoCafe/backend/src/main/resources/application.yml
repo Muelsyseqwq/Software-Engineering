@@ -25,3 +25,6 @@ nekocafe:
   jwt:
     secret: ${JWT_SECRET:change_me_to_at_least_32_chars}
     expires-minutes: ${JWT_EXPIRES_MINUTES:120}
+  upload:
+    cat-photo-dir: ${CAT_PHOTO_UPLOAD_DIR:uploads/cats}
+    cat-photo-url-prefix: /uploads/cats

@@ -1,9 +1,13 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 5MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:nekocafe}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=${MYSQL_USE_SSL:false}&allowPublicKeyRetrieval=${MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL:false}
-    username: ${MYSQL_USERNAME:nekocafe_app}
-    password: ${MYSQL_PASSWORD:change_me}
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:nekocafe}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=${MYSQL_USE_SSL:false}&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USERNAME:zhaoyh}
+    password: ${MYSQL_PASSWORD:zhaoyh666}
     hikari:
       pool-name: NekoCafeHikariPool
       maximum-pool-size: 10
@@ -13,6 +17,7 @@ spring:
     locations: classpath:db/migration
     baseline-on-migrate: true
     validate-on-migrate: true
+    ignore-migration-patterns: "*:missing"
 
 mybatis-plus:
   mapper-locations: classpath*:mapper/**/*.xml

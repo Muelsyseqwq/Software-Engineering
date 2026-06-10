@@ -1,17 +1,28 @@
 import { http } from './http'
 import type { ApiResult } from '@/types/api'
 
+export type CatStatus = 'ACTIVE' | 'INACTIVE' | 'ADOPTED'
+export type CatHealthStatus = 'HEALTHY' | 'OBSERVING' | 'TREATMENT' | 'RECOVERING'
+export type CatGender = 'MALE' | 'FEMALE' | 'UNKNOWN'
+
 export interface CatProfile {
   id?: number
   name: string
   breed?: string
   age?: number
-  gender?: string
+  weight?: number
+  gender?: CatGender | string
   personality?: string
-  healthStatus?: string
+  interact?: string
+  healthStatus?: CatHealthStatus | string
+  vaccinium?: string
   photoUrl?: string
   description?: string
-  status?: string
+  status?: CatStatus | string
+}
+
+export interface CatPhotoUploadResponse {
+  photoUrl: string
 }
 
 export async function fetchCats() {
@@ -34,7 +45,24 @@ export async function updateCat(id: number, payload: CatProfile) {
   return data.data
 }
 
+export async function updateCatHealthStatus(id: number, healthStatus: string) {
+  const { data } = await http.patch<ApiResult<CatProfile>>(`/cats/${id}/health-status`, { healthStatus })
+  return data.data
+}
+
+export async function updateCatStatus(id: number, status: string) {
+  const { data } = await http.patch<ApiResult<CatProfile>>(`/cats/${id}/status`, { status })
+  return data.data
+}
+
 export async function deleteCat(id: number) {
   const { data } = await http.delete<ApiResult<void>>(`/cats/${id}`)
+  return data.data
+}
+
+export async function uploadCatPhoto(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await http.post<ApiResult<CatPhotoUploadResponse>>('/cats/photos', formData)
   return data.data
 }
