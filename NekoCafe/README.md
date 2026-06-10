@@ -70,7 +70,7 @@ http://localhost:8080/swagger-ui/index.html
 
 ```bash
 cd frontend
-cp .env.example .env.local
+cp .env.example .env
 npm install
 npm run dev
 ```

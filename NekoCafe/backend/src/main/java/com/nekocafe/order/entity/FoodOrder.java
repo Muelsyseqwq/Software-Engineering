@@ -19,11 +19,11 @@ public class FoodOrder {
     private Long tableId;
     private BigDecimal totalAmount;
     private String status;
+    private String refundStatus;
     private String remark;
     private LocalDateTime paidAt;
     private LocalDateTime completedAt;
     private LocalDateTime cancelledAt;
-    private String refundStatus;
     private Long handlerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -46,6 +46,8 @@ public class FoodOrder {
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getRefundStatus() { return refundStatus; }
+    public void setRefundStatus(String refundStatus) { this.refundStatus = refundStatus; }
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
     public LocalDateTime getPaidAt() { return paidAt; }
@@ -54,8 +56,6 @@ public class FoodOrder {
     public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
     public LocalDateTime getCancelledAt() { return cancelledAt; }
     public void setCancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
-    public String getRefundStatus() { return refundStatus; }
-    public void setRefundStatus(String refundStatus) { this.refundStatus = refundStatus; }
     public Long getHandlerId() { return handlerId; }
     public void setHandlerId(Long handlerId) { this.handlerId = handlerId; }
     public LocalDateTime getCreatedAt() { return createdAt; }

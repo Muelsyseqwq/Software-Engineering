@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 
@@ -20,6 +21,11 @@ public class Store {
     private LocalTime closingTime;
     private String status;
     private String description;
+    private String businessArea;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
+    private String coverUrl;
+    private BigDecimal areaSquareMeter;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
@@ -42,6 +48,16 @@ public class Store {
     public void setStatus(String status) { this.status = status; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public String getBusinessArea() { return businessArea; }
+    public void setBusinessArea(String businessArea) { this.businessArea = businessArea; }
+    public BigDecimal getLatitude() { return latitude; }
+    public void setLatitude(BigDecimal latitude) { this.latitude = latitude; }
+    public BigDecimal getLongitude() { return longitude; }
+    public void setLongitude(BigDecimal longitude) { this.longitude = longitude; }
+    public String getCoverUrl() { return coverUrl; }
+    public void setCoverUrl(String coverUrl) { this.coverUrl = coverUrl; }
+    public BigDecimal getAreaSquareMeter() { return areaSquareMeter; }
+    public void setAreaSquareMeter(BigDecimal areaSquareMeter) { this.areaSquareMeter = areaSquareMeter; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
