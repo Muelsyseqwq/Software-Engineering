@@ -28,6 +28,7 @@ const router = createRouter({
         { path: 'staff', name: 'staff-home', component: () => import('@/views/staff/StaffHomeView.vue'), meta: { requiresAuth: true, roles: ['STAFF'] } },
         { path: 'staff/check-in', name: 'staff-check-in', component: () => import('@/views/staff/ReservationCheckInView.vue'), meta: { requiresAuth: true, roles: ['STAFF'] } },
         { path: 'staff/orders', name: 'staff-orders', component: () => import('@/views/staff/OrderFulfillmentView.vue'), meta: { requiresAuth: true, roles: ['STAFF'] } },
+        { path: 'staff/table-cat-status', name: 'staff-table-cat', component: () => import('@/views/staff/TableCatStatusView.vue'), meta: { requiresAuth: true, roles: ['STAFF'] } },
         { path: 'cats', name: 'cat-manage', component: () => import('@/views/cat/CatManageView.vue'), meta: { requiresAuth: true, roles: ['CAT_CARETAKER'] } },
         { path: 'manager', name: 'store-manager', component: () => import('@/views/manager/StoreManagerView.vue'), meta: { requiresAuth: true, roles: ['STORE_MANAGER'] } },
         { path: 'dashboard', name: 'dashboard', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },

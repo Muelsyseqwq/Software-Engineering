@@ -16,9 +16,15 @@ public class FoodOrder {
     private Long userId;
     private Long storeId;
     private Long reservationId;
+    private Long tableId;
     private BigDecimal totalAmount;
     private String status;
     private String remark;
+    private LocalDateTime paidAt;
+    private LocalDateTime completedAt;
+    private LocalDateTime cancelledAt;
+    private String refundStatus;
+    private Long handlerId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Integer deleted;
@@ -34,12 +40,24 @@ public class FoodOrder {
     public void setStoreId(Long storeId) { this.storeId = storeId; }
     public Long getReservationId() { return reservationId; }
     public void setReservationId(Long reservationId) { this.reservationId = reservationId; }
+    public Long getTableId() { return tableId; }
+    public void setTableId(Long tableId) { this.tableId = tableId; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getRemark() { return remark; }
     public void setRemark(String remark) { this.remark = remark; }
+    public LocalDateTime getPaidAt() { return paidAt; }
+    public void setPaidAt(LocalDateTime paidAt) { this.paidAt = paidAt; }
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public LocalDateTime getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
+    public String getRefundStatus() { return refundStatus; }
+    public void setRefundStatus(String refundStatus) { this.refundStatus = refundStatus; }
+    public Long getHandlerId() { return handlerId; }
+    public void setHandlerId(Long handlerId) { this.handlerId = handlerId; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }

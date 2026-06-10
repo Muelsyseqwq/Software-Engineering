@@ -29,6 +29,7 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   { path: '/staff', label: '店员后台', icon: '🛎️', hint: '前台值班总览', roles: ['STAFF'] },
   { path: '/staff/check-in', label: '预约签到', icon: '✅', hint: '核销到店顾客', roles: ['STAFF'] },
   { path: '/staff/orders', label: '订单履约', icon: '🥐', hint: '推进制作状态', roles: ['STAFF'] },
+  { path: '/staff/table-cat-status', label: '桌位猫咪', icon: '🪑', hint: '桌位与猫咪状态', roles: ['STAFF'] },
   { path: '/cats', label: '猫咪档案', icon: '🐈', hint: '健康与互动记录', roles: ['CAT_CARETAKER'] },
   { path: '/manager', label: '店长管理', icon: '🏠', hint: '门店与桌位运营', roles: ['STORE_MANAGER'] },
   { path: '/dashboard', label: '运营罗盘', icon: '🧭', hint: '跨店经营总览', roles: ['HQ_OPERATOR', 'ADMIN'] },
