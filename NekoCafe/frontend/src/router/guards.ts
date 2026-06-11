@@ -3,12 +3,21 @@ import { useAuthStore } from '@/stores/auth'
 import { canAccessRoute } from './permissions'
 
 export function setupRouterGuards(router: Router) {
-  router.beforeEach((to) => {
+  router.beforeEach(async (to) => {
     const auth = useAuthStore()
     const isAuthPage = to.name === 'login' || to.name === 'register'
 
     if (to.meta.requiresAuth && !auth.isLoggedIn) {
       return { name: 'login', query: { redirect: to.fullPath } }
+    }
+
+    if (auth.isLoggedIn && !isAuthPage && !auth.profileSynced) {
+      try {
+        await auth.fetchMe()
+      } catch {
+        auth.logout()
+        return { name: 'login', query: { redirect: to.fullPath } }
+      }
     }
 
     if (auth.isLoggedIn && !canAccessRoute(auth.roles, to.meta.roles)) {

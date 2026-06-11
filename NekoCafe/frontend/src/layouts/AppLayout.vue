@@ -12,7 +12,7 @@
       <div class="user-card">
         <span class="user-avatar">{{ avatarText }}</span>
         <div>
-          <strong>{{ auth.user?.nickname || '游客猫爪' }}</strong>
+          <strong>{{ sidebarDisplayName }}</strong>
           <p>{{ roleSummary }}</p>
         </div>
       </div>
@@ -64,7 +64,20 @@ const roleSummary = computed(() => {
   return auth.roles.map((role) => roleLabels[role] ?? role).join(' / ')
 })
 
-const avatarText = computed(() => auth.user?.nickname?.slice(0, 1) || '猫')
+const sidebarDisplayName = computed(() => {
+  const user = auth.user
+  if (!user) return '游客猫爪'
+
+  if (auth.roles.includes('CAT_CARETAKER')) {
+    const storeNames = user.storeNames?.filter(Boolean) ?? []
+    if (storeNames.length) return storeNames.join(' / ')
+    if (user.storeName) return user.storeName
+  }
+
+  return user.nickname || '游客猫爪'
+})
+
+const avatarText = computed(() => sidebarDisplayName.value.slice(0, 1) || '猫')
 
 async function handleLogout() {
   auth.logout()
