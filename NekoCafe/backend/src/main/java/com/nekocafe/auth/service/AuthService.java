@@ -10,6 +10,10 @@ import com.nekocafe.customer.entity.UserPreference;
 import com.nekocafe.customer.mapper.UserPreferenceMapper;
 import com.nekocafe.security.AuthPrincipal;
 import com.nekocafe.security.JwtService;
+import com.nekocafe.store.entity.Store;
+import com.nekocafe.store.entity.UserStoreRole;
+import com.nekocafe.store.mapper.StoreMapper;
+import com.nekocafe.store.mapper.UserStoreRoleMapper;
 import com.nekocafe.user.entity.MemberAccount;
 import com.nekocafe.user.entity.Role;
 import com.nekocafe.user.entity.User;
@@ -32,12 +36,15 @@ public class AuthService {
 
     private static final String ACTIVE = "ACTIVE";
     private static final String CUSTOMER = "CUSTOMER";
+    private static final String CAT_CARETAKER = "CAT_CARETAKER";
 
     private final UserMapper userMapper;
     private final RoleMapper roleMapper;
     private final UserRoleMapper userRoleMapper;
     private final MemberAccountMapper memberAccountMapper;
     private final UserPreferenceMapper userPreferenceMapper;
+    private final UserStoreRoleMapper userStoreRoleMapper;
+    private final StoreMapper storeMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
 
@@ -47,6 +54,8 @@ public class AuthService {
         UserRoleMapper userRoleMapper,
         MemberAccountMapper memberAccountMapper,
         UserPreferenceMapper userPreferenceMapper,
+        UserStoreRoleMapper userStoreRoleMapper,
+        StoreMapper storeMapper,
         PasswordEncoder passwordEncoder,
         JwtService jwtService
     ) {
@@ -55,6 +64,8 @@ public class AuthService {
         this.userRoleMapper = userRoleMapper;
         this.memberAccountMapper = memberAccountMapper;
         this.userPreferenceMapper = userPreferenceMapper;
+        this.userStoreRoleMapper = userStoreRoleMapper;
+        this.storeMapper = storeMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
     }
@@ -173,14 +184,73 @@ public class AuthService {
     }
 
     private AuthUserResponse toUserResponse(User user, List<String> roles) {
+        CaretakerStoreInfo storeInfo = resolveCaretakerStoreInfo(user.getId(), roles);
         return new AuthUserResponse(
             user.getId(),
             user.getUsername(),
             user.getNickname(),
             user.getPhone(),
             user.getEmail(),
-            roles
+            roles,
+            storeInfo.storeId(),
+            storeInfo.storeName(),
+            storeInfo.storeNames()
         );
+    }
+
+    private CaretakerStoreInfo resolveCaretakerStoreInfo(Long userId, List<String> roles) {
+        if (userId == null || roles == null || !roles.contains(CAT_CARETAKER)) {
+            return new CaretakerStoreInfo(null, null, List.of());
+        }
+
+        List<UserStoreRole> userStoreRoles = userStoreRoleMapper.selectList(new LambdaQueryWrapper<UserStoreRole>()
+            .eq(UserStoreRole::getUserId, userId)
+            .eq(UserStoreRole::getRoleCode, CAT_CARETAKER)
+            .eq(UserStoreRole::getStatus, ACTIVE)
+            .orderByAsc(UserStoreRole::getStoreId));
+        if (userStoreRoles.isEmpty()) {
+            return new CaretakerStoreInfo(null, null, List.of());
+        }
+
+        List<Long> storeIds = userStoreRoles.stream()
+            .map(UserStoreRole::getStoreId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        if (storeIds.isEmpty()) {
+            return new CaretakerStoreInfo(null, null, List.of());
+        }
+
+        List<Store> stores = storeMapper.selectBatchIds(storeIds);
+        if (stores == null || stores.isEmpty()) {
+            return new CaretakerStoreInfo(null, null, List.of());
+        }
+
+        List<Store> orderedStores = storeIds.stream()
+            .map(storeId -> stores.stream()
+                .filter(store -> Objects.equals(store.getId(), storeId))
+                .findFirst()
+                .orElse(null))
+            .filter(Objects::nonNull)
+            .filter(store -> !Objects.equals(store.getDeleted(), 1))
+            .toList();
+        if (orderedStores.isEmpty()) {
+            return new CaretakerStoreInfo(null, null, List.of());
+        }
+
+        List<String> storeNames = orderedStores.stream()
+            .map(Store::getName)
+            .filter(name -> name != null && !name.isBlank())
+            .toList();
+        Store primaryStore = orderedStores.get(0);
+        return new CaretakerStoreInfo(
+            primaryStore.getId(),
+            primaryStore.getName(),
+            storeNames
+        );
+    }
+
+    private record CaretakerStoreInfo(Long storeId, String storeName, List<String> storeNames) {
     }
 
     private List<String> loadRoleCodes(Long userId) {

@@ -26,6 +26,9 @@ export interface AuthUser {
   phone?: string | null
   email?: string | null
   roles: RoleCode[]
+  storeId?: number | null
+  storeName?: string | null
+  storeNames?: string[] | null
 }
 
 export interface AuthResponse {

@@ -8,6 +8,9 @@ public record AuthUserResponse(
     String nickname,
     String phone,
     String email,
-    List<String> roles
+    List<String> roles,
+    Long storeId,
+    String storeName,
+    List<String> storeNames
 ) {
 }

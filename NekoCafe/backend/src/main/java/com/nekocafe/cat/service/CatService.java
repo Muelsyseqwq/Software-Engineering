@@ -8,6 +8,7 @@ import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import java.util.Collections;
@@ -17,10 +18,10 @@ import java.util.Set;
 @Service
 public class CatService {
 
-    private static final String HEALTHY = "HEALTHY";
-    private static final String ACTIVE = "ACTIVE";
-    private static final Set<String> HEALTH_STATUSES = Set.of("HEALTHY", "OBSERVING", "TREATMENT", "RECOVERING");
-    private static final Set<String> CAT_STATUSES = Set.of("ACTIVE", "INACTIVE", "ADOPTED");
+    private static final String HEALTHY = "健康";
+    private static final String AVAILABLE = "AVAILABLE";
+    private static final Set<String> HEALTH_STATUSES = Set.of("健康", "观察中", "治疗中", "恢复中");
+    private static final Set<String> CAT_STATUSES = Set.of("AVAILABLE", "RESTING", "ADOPTED");
 
     private final CatMapper catMapper;
     private final JdbcTemplate jdbcTemplate;
@@ -87,9 +88,12 @@ public class CatService {
         return toResponse(cat);
     }
 
+    @Transactional
     public void deleteCat(Long caretakerId, Long id) {
         getExistingCat(caretakerId, id);
-        catMapper.deleteById(id);
+        jdbcTemplate.update("DELETE FROM cat_schedule WHERE cat_id = ?", id);
+        jdbcTemplate.update("DELETE FROM reservation_cat WHERE cat_id = ?", id);
+        jdbcTemplate.update("DELETE FROM cat WHERE id = ?", id);
     }
 
     private Cat getExistingCat(Long caretakerId, Long id) {
@@ -145,10 +149,10 @@ public class CatService {
     private String normalizeHealthStatus(String healthStatus) {
         String normalized = normalizeCode(healthStatus, HEALTHY);
         normalized = switch (normalized) {
-            case "健康" -> "HEALTHY";
-            case "观察中" -> "OBSERVING";
-            case "治疗中" -> "TREATMENT";
-            case "恢复中" -> "RECOVERING";
+            case "HEALTHY" -> "健康";
+            case "OBSERVING" -> "观察中";
+            case "TREATMENT" -> "治疗中";
+            case "RECOVERING" -> "恢复中";
             default -> normalized;
         };
         if (!HEALTH_STATUSES.contains(normalized)) {
@@ -158,11 +162,10 @@ public class CatService {
     }
 
     private String normalizeCatStatus(String status) {
-        String normalized = normalizeCode(status, ACTIVE);
+        String normalized = normalizeCode(status, AVAILABLE);
         normalized = switch (normalized) {
-            case "AVAILABLE" -> "ACTIVE";
-            case "RESTING", "OFFLINE" -> "INACTIVE";
-            case "ADOPTED" -> "ADOPTED";
+            case "ACTIVE" -> "AVAILABLE";
+            case "INACTIVE", "OFFLINE", "DISABLED" -> "RESTING";
             default -> normalized;
         };
         if (!CAT_STATUSES.contains(normalized)) {
