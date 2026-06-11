@@ -12,11 +12,11 @@ import com.nekocafe.user.entity.UserRole;
 import com.nekocafe.user.mapper.RoleMapper;
 import com.nekocafe.user.mapper.UserMapper;
 import com.nekocafe.user.mapper.UserRoleMapper;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -31,15 +31,18 @@ public class AdminService {
     private final UserRoleMapper userRoleMapper;
     private final StoreMapper storeMapper;
     private final UserStoreRoleMapper userStoreRoleMapper;
+    private final PasswordEncoder passwordEncoder;
 
     public AdminService(UserMapper userMapper, RoleMapper roleMapper,
                         UserRoleMapper userRoleMapper, StoreMapper storeMapper,
-                        UserStoreRoleMapper userStoreRoleMapper) {
+                        UserStoreRoleMapper userStoreRoleMapper,
+                        PasswordEncoder passwordEncoder) {
         this.userMapper = userMapper;
         this.roleMapper = roleMapper;
         this.userRoleMapper = userRoleMapper;
         this.storeMapper = storeMapper;
         this.userStoreRoleMapper = userStoreRoleMapper;
+        this.passwordEncoder = passwordEncoder;
     }
 
     // ---- users ----
@@ -124,19 +127,16 @@ public class AdminService {
 
     @Transactional
     public void assignStoreManager(Long userId, Long storeId, Long createdBy) {
-        // Verify user exists
         User user = userMapper.selectById(userId);
         if (user == null || user.getDeleted() == 1) {
             throw new BizException(4001, "用户不存在");
         }
-        // Verify store exists
         Store store = storeMapper.selectOne(
                 new LambdaQueryWrapper<Store>().eq(Store::getId, storeId).eq(Store::getDeleted, 0));
         if (store == null) {
             throw new BizException(4002, "门店不存在");
         }
 
-        // Ensure user has STORE_MANAGER role in user_role table
         Role managerRole = roleMapper.selectOne(
                 new LambdaQueryWrapper<Role>().eq(Role::getCode, STORE_MANAGER));
         if (managerRole == null) {
@@ -153,7 +153,6 @@ public class AdminService {
             userRoleMapper.insert(ur);
         }
 
-        // Check if already assigned to this store
         UserStoreRole existing = userStoreRoleMapper.selectOne(
                 new LambdaQueryWrapper<UserStoreRole>()
                         .eq(UserStoreRole::getUserId, userId)
@@ -163,7 +162,6 @@ public class AdminService {
             if ("ACTIVE".equals(existing.getStatus())) {
                 throw new BizException(4004, "该用户已是此门店的店长");
             }
-            // Reactivate
             existing.setStatus("ACTIVE");
             existing.setDismissedBy(null);
             existing.setDismissedAt(null);
@@ -198,6 +196,79 @@ public class AdminService {
         userStoreRoleMapper.updateById(existing);
     }
 
+    /**
+     * Create a new user and assign as store manager in a single transaction.
+     */
+    @Transactional
+    public AdminUserRow createUserAndAssignStoreManager(CreateStoreManagerRequest request, Long createdBy) {
+        // validate
+        if (request.username() == null || request.username().trim().isEmpty()) {
+            throw new BizException(400, "用户名不能为空");
+        }
+        if (request.password() == null || request.password().trim().isEmpty()) {
+            throw new BizException(400, "密码不能为空");
+        }
+        if (request.nickname() == null || request.nickname().trim().isEmpty()) {
+            throw new BizException(400, "昵称不能为空");
+        }
+        if (request.storeId() == null) {
+            throw new BizException(400, "请选择门店");
+        }
+
+        String username = request.username().trim();
+        String nickname = request.nickname().trim();
+        String phone = request.phone() != null ? request.phone().trim() : null;
+        String email = request.email() != null ? request.email().trim() : null;
+
+        // check uniqueness
+        if (userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getUsername, username)) > 0) {
+            throw new BizException(4006, "用户名已存在");
+        }
+        if (phone != null && userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getPhone, phone)) > 0) {
+            throw new BizException(4007, "手机号已存在");
+        }
+        if (email != null && userMapper.selectCount(new LambdaQueryWrapper<User>()
+                .eq(User::getEmail, email)) > 0) {
+            throw new BizException(4008, "邮箱已存在");
+        }
+
+        // create user
+        User user = new User();
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(request.password()));
+        user.setNickname(nickname);
+        user.setPhone(phone);
+        user.setEmail(email);
+        user.setStatus("ACTIVE");
+        userMapper.insert(user);
+
+        // assign STORE_MANAGER role
+        Role managerRole = roleMapper.selectOne(
+                new LambdaQueryWrapper<Role>().eq(Role::getCode, STORE_MANAGER));
+        if (managerRole == null) {
+            throw new BizException(4003, "店长角色未初始化");
+        }
+        UserRole ur = new UserRole();
+        ur.setUserId(user.getId());
+        ur.setRoleId(managerRole.getId());
+        userRoleMapper.insert(ur);
+
+        // assign to store
+        UserStoreRole usr = new UserStoreRole();
+        usr.setUserId(user.getId());
+        usr.setStoreId(request.storeId());
+        usr.setRoleCode(STORE_MANAGER);
+        usr.setStatus("ACTIVE");
+        usr.setCreatedBy(createdBy);
+        userStoreRoleMapper.insert(usr);
+
+        return new AdminUserRow(user.getId(), user.getUsername(), user.getNickname(),
+                user.getPhone(), user.getEmail(), user.getStatus(),
+                List.of(STORE_MANAGER));
+    }
+
     // ---- user status ----
 
     @Transactional
@@ -222,4 +293,8 @@ public class AdminService {
     public record StoreManagerRow(Long id, Long userId, String username, String nickname,
                                   Long storeId, String storeName, String status,
                                   LocalDateTime createdAt) {}
+
+    public record CreateStoreManagerRequest(
+            String username, String password, String nickname,
+            String phone, String email, Long storeId) {}
 }

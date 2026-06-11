@@ -73,3 +73,17 @@ export async function removeStoreManager(userId: number, storeId: number, dismis
   })
   return data.data
 }
+
+export interface CreateStoreManagerWithUserRequest {
+  username: string
+  password: string
+  nickname: string
+  phone?: string
+  email?: string
+  storeId: number
+}
+
+export async function createStoreManagerWithUser(req: CreateStoreManagerWithUserRequest) {
+  const { data } = await http.post<ApiResult<AdminUserRow>>('/admin/store-managers/with-user', req)
+  return data.data
+}
