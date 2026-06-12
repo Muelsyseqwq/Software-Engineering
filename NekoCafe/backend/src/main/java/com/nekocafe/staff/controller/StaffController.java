@@ -2,6 +2,9 @@ package com.nekocafe.staff.controller;
 
 import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.common.result.ApiResult;
+import com.nekocafe.queue.service.WaitingQueueService;
+import com.nekocafe.queue.service.WaitingQueueService.QueueTicketResponse;
+import com.nekocafe.queue.service.WaitingQueueService.StaffQueueStatusResponse;
 import com.nekocafe.security.AuthPrincipal;
 import com.nekocafe.staff.dto.StaffOrderRow;
 import com.nekocafe.staff.dto.StaffReservationRow;
@@ -25,9 +28,11 @@ import java.util.List;
 public class StaffController {
 
     private final StaffService staffService;
+    private final WaitingQueueService waitingQueueService;
 
-    public StaffController(StaffService staffService) {
+    public StaffController(StaffService staffService, WaitingQueueService waitingQueueService) {
         this.staffService = staffService;
+        this.waitingQueueService = waitingQueueService;
     }
 
     @GetMapping("/reservations/today")
@@ -82,5 +87,29 @@ public class StaffController {
                                               @RequestParam(required = false) String reason) {
         staffService.updateTableStatus(id, principal.userId(), status, reason);
         return ApiResult.ok();
+    }
+
+    @GetMapping("/queues/status")
+    public ApiResult<StaffQueueStatusResponse> queueStatus(@AuthenticationPrincipal AuthPrincipal principal,
+                                                            @RequestParam Long storeId) {
+        return ApiResult.ok(waitingQueueService.staffStatus(principal.userId(), storeId));
+    }
+
+    @PostMapping("/queues/{storeId}/next")
+    public ApiResult<StaffQueueStatusResponse> callNextQueueNumber(@AuthenticationPrincipal AuthPrincipal principal,
+                                                                    @PathVariable Long storeId) {
+        return ApiResult.ok(waitingQueueService.callNext(principal.userId(), storeId));
+    }
+
+    @PostMapping("/queues/tickets/{ticketId}/seat")
+    public ApiResult<QueueTicketResponse> markQueueTicketSeated(@AuthenticationPrincipal AuthPrincipal principal,
+                                                                 @PathVariable Long ticketId) {
+        return ApiResult.ok(waitingQueueService.markSeated(principal.userId(), ticketId));
+    }
+
+    @PostMapping("/queues/{storeId}/reset")
+    public ApiResult<StaffQueueStatusResponse> resetQueue(@AuthenticationPrincipal AuthPrincipal principal,
+                                                           @PathVariable Long storeId) {
+        return ApiResult.ok(waitingQueueService.reset(principal.userId(), storeId));
     }
 }
