@@ -202,7 +202,7 @@ public class StaffService {
         return mapOrdersToRows(orders);
     }
 
-    public List<DiningTable> listTables(Long staffId, String status) {
+    public List<DiningTable> listTables(Long staffId, String status, Integer capacity) {
         List<Long> storeIds = resolveStoreIds(staffId);
         if (storeIds.isEmpty()) {
             return Collections.emptyList();
@@ -212,6 +212,9 @@ public class StaffService {
             .in(DiningTable::getStoreId, storeIds);
         if (status != null && !status.isBlank()) {
             wrapper.eq(DiningTable::getStatus, status);
+        }
+        if (capacity != null) {
+            wrapper.eq(DiningTable::getCapacity, capacity);
         }
         wrapper.orderByAsc(DiningTable::getTableNo);
         return diningTableMapper.selectList(wrapper);

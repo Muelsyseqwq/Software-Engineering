@@ -18,25 +18,28 @@
             <el-option label="清洁中" value="CLEANING" />
             <el-option label="停用" value="DISABLED" />
           </el-select>
+          <el-select v-model="tableCapacityFilter" placeholder="全部人数" clearable style="width: 140px">
+            <el-option label="2人" :value="2" />
+            <el-option label="4人" :value="4" />
+            <el-option label="6人" :value="6" />
+          </el-select>
           <el-button type="primary" @click="loadTables">查询</el-button>
         </div>
 
-        <div class="table-wrap">
-          <el-table :data="tables" border empty-text="暂无桌位数据">
-            <el-table-column prop="tableNo" label="桌号" width="100" />
-            <el-table-column prop="area" label="区域" width="130" />
-            <el-table-column prop="capacity" label="容纳人数" width="100" />
-            <el-table-column prop="status" label="状态" width="120">
-              <template #default="{ row }">
-                <el-tag :type="statusTagType(row.status)">{{ translateTableStatus(row.status) }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="操作" width="280">
-              <template #default="{ row }">
-                <el-button size="small" @click="openStatusDialog(row)">修改状态</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
+        <div v-if="tables.length === 0" class="empty-text">暂无桌位数据</div>
+        <div class="table-grid">
+          <div
+            v-for="row in tables"
+            :key="row.id"
+            class="table-card"
+            :class="'status-' + row.status.toLowerCase()"
+            @click="openStatusDialog(row)"
+          >
+            <div class="table-no">{{ row.tableNo }}</div>
+            <div class="table-meta">{{ row.area }}</div>
+            <div class="table-meta">{{ row.capacity }}人桌</div>
+            <div class="table-status">{{ translateTableStatus(row.status) }}</div>
+          </div>
         </div>
       </el-tab-pane>
 
@@ -56,7 +59,11 @@
             <el-table-column prop="name" label="名字" width="100" />
             <el-table-column prop="breed" label="品种" width="120" />
             <el-table-column prop="age" label="年龄" width="80" />
-            <el-table-column prop="gender" label="性别" width="80" />
+            <el-table-column prop="gender" label="性别" width="80">
+              <template #default="{ row }">
+                {{ translateGender(row.gender) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="personality" label="性格" min-width="140" show-overflow-tooltip />
             <el-table-column prop="healthStatus" label="健康状态" width="120" />
             <el-table-column prop="status" label="互动状态" width="120">
@@ -105,6 +112,7 @@ const activeTab = ref('tables')
 const tables = ref<DiningTable[]>([])
 const cats = ref<Cat[]>([])
 const tableStatusFilter = ref('')
+const tableCapacityFilter = ref<number | undefined>(undefined)
 const catStatusFilter = ref('')
 
 const statusDialogVisible = ref(false)
@@ -117,7 +125,7 @@ const statusForm = ref({
 
 async function loadTables() {
   try {
-    tables.value = await fetchTables(tableStatusFilter.value || undefined)
+    tables.value = await fetchTables(tableStatusFilter.value || undefined, tableCapacityFilter.value)
   } catch (error) {
     ElMessage.warning(error instanceof Error ? error.message : '加载桌位数据失败')
   }
@@ -171,6 +179,15 @@ function translateCatStatus(status: string) {
   return map[status] || status
 }
 
+function translateGender(gender: string) {
+  const map: Record<string, string> = {
+    MALE: '公',
+    FEMALE: '母',
+    UNKNOWN: '未知'
+  }
+  return map[gender] || gender
+}
+
 function catStatusTagType(status: string) {
   switch (status) {
     case 'AVAILABLE': return 'success'
@@ -213,4 +230,64 @@ onMounted(() => {
 .eyebrow { margin: 0 0 8px; color: #d97706; font-weight: 800; letter-spacing: 0.08em; }
 .filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
 .table-wrap { overflow-x: auto; }
+
+/* 桌位矩阵卡片 */
+.table-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 16px;
+}
+.table-card {
+  border-radius: 12px;
+  padding: 20px 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.table-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+}
+.table-card .table-no {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.table-card .table-meta {
+  font-size: 13px;
+  opacity: 0.92;
+  margin-bottom: 2px;
+}
+.table-card .table-status {
+  font-size: 14px;
+  font-weight: 600;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255,255,255,0.35);
+}
+
+/* 状态颜色 */
+.table-card.status-available {
+  background: linear-gradient(135deg, #67c23a, #85ce61);
+}
+.table-card.status-occupied {
+  background: linear-gradient(135deg, #f56c6c, #f78989);
+}
+.table-card.status-reserved {
+  background: linear-gradient(135deg, #e6a23c, #ebb563);
+}
+.table-card.status-cleaning {
+  background: linear-gradient(135deg, #409eff, #66b1ff);
+}
+.table-card.status-disabled {
+  background: linear-gradient(135deg, #909399, #a6a9ad);
+}
+
+.empty-text {
+  text-align: center;
+  color: #909399;
+  padding: 40px 0;
+}
 </style>

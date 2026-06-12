@@ -96,8 +96,8 @@ export async function fetchHandledOrders() {
   return data.data
 }
 
-export async function fetchTables(status?: string) {
-  const { data } = await http.get<ApiResult<DiningTable[]>>('/staff/tables', { params: { status } })
+export async function fetchTables(status?: string, capacity?: number) {
+  const { data } = await http.get<ApiResult<DiningTable[]>>('/staff/tables', { params: { status, capacity } })
   return data.data
 }
 

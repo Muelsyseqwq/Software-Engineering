@@ -70,8 +70,9 @@ public class StaffController {
 
     @GetMapping("/tables")
     public ApiResult<List<DiningTable>> listTables(@AuthenticationPrincipal AuthPrincipal principal,
-                                                    @RequestParam(required = false) String status) {
-        return ApiResult.ok(staffService.listTables(principal.userId(), status));
+                                                    @RequestParam(required = false) String status,
+                                                    @RequestParam(required = false) Integer capacity) {
+        return ApiResult.ok(staffService.listTables(principal.userId(), status, capacity));
     }
 
     @GetMapping("/cats")
