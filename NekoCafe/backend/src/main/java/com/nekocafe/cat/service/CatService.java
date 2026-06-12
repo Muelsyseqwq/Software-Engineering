@@ -109,7 +109,7 @@ public class CatService {
         if (DISABLED.equals(normalizedStatus)) {
             cat.setStatus(DISABLED);
         } else {
-            syncStatusWithHealth(cat);
+            cat.setStatus(statusForHealth(cat.getHealthStatus()));
         }
         catMapper.updateById(cat);
         return toResponse(cat);
