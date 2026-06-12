@@ -124,13 +124,6 @@
             </el-table-column>
             <el-table-column prop="remark" label="备注" min-width="140" show-overflow-tooltip />
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-            <el-table-column label="操作" width="220" fixed="right">
-              <template #default="{ row }">
-                <el-button v-if="row.status === 'RESERVED'" size="small" type="success" @click="handleReservationStatus(row, 'CHECKED_IN')">到店</el-button>
-                <el-button v-if="row.status === 'CHECKED_IN'" size="small" type="primary" @click="handleReservationStatus(row, 'COMPLETED')">完成</el-button>
-                <el-button v-if="row.status === 'RESERVED'" size="small" type="danger" @click="handleReservationStatus(row, 'CANCELLED')">取消</el-button>
-              </template>
-            </el-table-column>
           </el-table>
         </el-card>
       </el-tab-pane>
@@ -163,7 +156,7 @@
             <el-table-column prop="paidAt" label="支付时间" min-width="170" />
             <el-table-column prop="completedAt" label="完成时间" min-width="170" />
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-            <el-table-column label="操作" width="100"><template #default="{ row }"><el-button size="small" @click="openOrderDetail(row.id)">详情</el-button></template></el-table-column>
+            <el-table-column label="查看详情" width="110"><template #default="{ row }"><el-button size="small" @click="openOrderDetail(row.id)">查看详情</el-button></template></el-table-column>
           </el-table>
         </el-card>
       </el-tab-pane>
@@ -349,6 +342,7 @@
         <p><strong>顾客：</strong>{{ orderDetail.customerName || '散客' }}</p>
         <p><strong>金额：</strong>¥{{ money(orderDetail.totalAmount) }}</p>
         <p><strong>状态：</strong>{{ orderStatusLabel(orderDetail.status) }}</p>
+        <p><strong>顾客评价：</strong>{{ orderReviewText(orderDetail) }}</p>
         <el-table :data="orderDetail.items" border size="small"><el-table-column prop="dishName" label="菜品" /><el-table-column label="单价"><template #default="{ row }">¥{{ money(row.unitPrice) }}</template></el-table-column><el-table-column prop="quantity" label="数量" /><el-table-column label="小计"><template #default="{ row }">¥{{ money(row.subtotal) }}</template></el-table-column></el-table>
       </div>
     </el-drawer>
@@ -383,7 +377,6 @@ import {
   grantManagerStaffLeave,
   hireManagerStaff,
   updateManagerDishPrice,
-  updateManagerReservationStatus,
   updateManagerShift,
   updateManagerStore,
   updateManagerStoreStatus,
@@ -531,6 +524,11 @@ function cleanMetricsQuery() { return { from: metricsRange.value?.[0], to: metri
 function cleanReservationQuery() { return { status: reservationQuery.status || undefined, date: reservationQuery.date || undefined } }
 function cleanOrderQuery() { return { status: orderQuery.status || undefined, from: orderRange.value?.[0], to: orderRange.value?.[1] } }
 function cleanShiftQuery() { return { from: shiftRange.value?.[0], to: shiftRange.value?.[1] } }
+function orderReviewText(detail: ManagerOrderDetail) {
+  if (!detail.reviewRating && !detail.reviewContent) return '暂无评价'
+  const rating = detail.reviewRating ? `${detail.reviewRating} 星` : '未评分'
+  return detail.reviewContent ? `${rating}｜${detail.reviewContent}` : rating
+}
 
 function openStoreDialog() {
   if (!store.value) return
@@ -567,10 +565,6 @@ async function handleSubmit() {
   if (!form.capacity || form.capacity <= 0) return ElMessage.warning('容量必须大于 0')
   savingTable.value = true
   try { if (editingId.value) await updateManagerTable(editingId.value, form); else await createManagerTable(form); ElMessage.success('桌位保存成功'); dialogVisible.value = false; await loadTables() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '桌位保存失败') } finally { savingTable.value = false }
-}
-async function handleReservationStatus(row: ManagerReservationRow, status: string) {
-  if (status === 'CANCELLED') { try { await ElMessageBox.confirm('取消预约后会释放对应时段库存，确认取消吗？', '取消预约', { type: 'warning' }) } catch { return } }
-  try { await updateManagerReservationStatus(row.id, status); ElMessage.success(`预约已更新为${reservationStatusLabel(status)}`); await loadReservations() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '预约状态更新失败') }
 }
 async function openOrderDetail(id: number) {
   try { orderDetail.value = await fetchManagerOrderDetail(id); orderDrawerVisible.value = true } catch (error) { ElMessage.error(error instanceof Error ? error.message : '订单详情加载失败') }
