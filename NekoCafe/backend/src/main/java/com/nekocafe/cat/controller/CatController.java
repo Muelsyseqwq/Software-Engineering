@@ -1,8 +1,11 @@
 package com.nekocafe.cat.controller;
 
+import com.nekocafe.cat.dto.CatHealthRecordRequest;
+import com.nekocafe.cat.dto.CatHealthRecordResponse;
 import com.nekocafe.cat.dto.CatPhotoUploadResponse;
 import com.nekocafe.cat.dto.CatRequest;
 import com.nekocafe.cat.dto.CatResponse;
+import com.nekocafe.cat.dto.CatWeightTrendPoint;
 import com.nekocafe.cat.service.CatPhotoStorageService;
 import com.nekocafe.cat.service.CatService;
 import com.nekocafe.common.result.ApiResult;
@@ -52,6 +55,25 @@ public class CatController {
     @GetMapping("/{id}")
     public ApiResult<CatResponse> getCat(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         return ApiResult.ok(catService.getCat(principal.userId(), id));
+    }
+
+    @GetMapping("/{id}/health-records")
+    public ApiResult<List<CatHealthRecordResponse>> listHealthRecords(@AuthenticationPrincipal AuthPrincipal principal,
+                                                                       @PathVariable Long id) {
+        return ApiResult.ok(catService.listHealthRecords(principal.userId(), id));
+    }
+
+    @PostMapping("/{id}/health-records")
+    public ApiResult<CatHealthRecordResponse> createHealthRecord(@AuthenticationPrincipal AuthPrincipal principal,
+                                                                 @PathVariable Long id,
+                                                                 @Valid @RequestBody CatHealthRecordRequest payload) {
+        return ApiResult.ok(catService.createHealthRecord(principal.userId(), id, payload));
+    }
+
+    @GetMapping("/{id}/weight-trend")
+    public ApiResult<List<CatWeightTrendPoint>> weightTrend(@AuthenticationPrincipal AuthPrincipal principal,
+                                                            @PathVariable Long id) {
+        return ApiResult.ok(catService.weightTrend(principal.userId(), id));
     }
 
     @PostMapping

@@ -1,9 +1,14 @@
 package com.nekocafe.cat.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.nekocafe.cat.dto.CatHealthRecordRequest;
+import com.nekocafe.cat.dto.CatHealthRecordResponse;
 import com.nekocafe.cat.dto.CatRequest;
 import com.nekocafe.cat.dto.CatResponse;
+import com.nekocafe.cat.dto.CatWeightTrendPoint;
 import com.nekocafe.cat.entity.Cat;
+import com.nekocafe.cat.entity.CatHealthRecord;
+import com.nekocafe.cat.mapper.CatHealthRecordMapper;
 import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -11,8 +16,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 @Service
@@ -24,10 +32,12 @@ public class CatService {
     private static final Set<String> CAT_STATUSES = Set.of("AVAILABLE", "RESTING", "ADOPTED");
 
     private final CatMapper catMapper;
+    private final CatHealthRecordMapper catHealthRecordMapper;
     private final JdbcTemplate jdbcTemplate;
 
-    public CatService(CatMapper catMapper, JdbcTemplate jdbcTemplate) {
+    public CatService(CatMapper catMapper, CatHealthRecordMapper catHealthRecordMapper, JdbcTemplate jdbcTemplate) {
         this.catMapper = catMapper;
+        this.catHealthRecordMapper = catHealthRecordMapper;
         this.jdbcTemplate = jdbcTemplate;
     }
 
@@ -50,6 +60,7 @@ public class CatService {
         return toResponse(getExistingCat(caretakerId, id));
     }
 
+    @Transactional
     public CatResponse createCat(Long caretakerId, CatRequest request) {
         List<Long> storeIds = resolveStoreIds(caretakerId);
         if (storeIds.isEmpty()) {
@@ -62,15 +73,23 @@ public class CatService {
         cat.setStatus(normalizeCatStatus(request.status()));
         cat.setDeleted(0);
         catMapper.insert(cat);
+        insertHealthRecordFromCat(cat, caretakerId, "创建猫咪档案");
         return toResponse(cat);
     }
 
+    @Transactional
     public CatResponse updateCat(Long caretakerId, Long id, CatRequest request) {
         Cat cat = getExistingCat(caretakerId, id);
+        BigDecimal oldWeight = cat.getWeight();
+        String oldVaccinium = cat.getVaccinium();
+        String oldInteract = cat.getInteract();
         applyRequest(cat, request);
         cat.setHealthStatus(normalizeHealthStatus(request.healthStatus()));
         cat.setStatus(normalizeCatStatus(request.status()));
         catMapper.updateById(cat);
+        if (healthSnapshotChanged(oldWeight, oldVaccinium, oldInteract, cat)) {
+            insertHealthRecordFromCat(cat, caretakerId, "更新猫咪档案");
+        }
         return toResponse(cat);
     }
 
@@ -88,11 +107,72 @@ public class CatService {
         return toResponse(cat);
     }
 
+    public List<CatHealthRecordResponse> listHealthRecords(Long caretakerId, Long catId) {
+        getExistingCat(caretakerId, catId);
+        return catHealthRecordMapper.selectList(new LambdaQueryWrapper<CatHealthRecord>()
+                .eq(CatHealthRecord::getCatId, catId)
+                .eq(CatHealthRecord::getDeleted, 0)
+                .orderByDesc(CatHealthRecord::getRecordDate)
+                .orderByDesc(CatHealthRecord::getId))
+            .stream()
+            .map(this::toHealthRecordResponse)
+            .toList();
+    }
+
+    @Transactional
+    public CatHealthRecordResponse createHealthRecord(Long caretakerId, Long catId, CatHealthRecordRequest request) {
+        Cat cat = getExistingCat(caretakerId, catId);
+        validateHealthRecordContent(request);
+        CatHealthRecord record = new CatHealthRecord();
+        record.setCatId(cat.getId());
+        record.setStoreId(cat.getStoreId());
+        record.setRecordDate(request.recordDate() == null ? LocalDate.now() : request.recordDate());
+        record.setWeight(request.weight());
+        record.setVaccinium(trimToNull(request.vaccinium()));
+        record.setInteract(trimToNull(request.interact()));
+        record.setNote(trimToNull(request.note()));
+        record.setRecordedBy(caretakerId);
+        record.setDeleted(0);
+        catHealthRecordMapper.insert(record);
+
+        boolean shouldUpdateCat = false;
+        if (record.getWeight() != null) {
+            cat.setWeight(record.getWeight());
+            shouldUpdateCat = true;
+        }
+        if (StringUtils.hasText(record.getVaccinium())) {
+            cat.setVaccinium(record.getVaccinium());
+            shouldUpdateCat = true;
+        }
+        if (StringUtils.hasText(record.getInteract())) {
+            cat.setInteract(record.getInteract());
+            shouldUpdateCat = true;
+        }
+        if (shouldUpdateCat) {
+            catMapper.updateById(cat);
+        }
+        return toHealthRecordResponse(record);
+    }
+
+    public List<CatWeightTrendPoint> weightTrend(Long caretakerId, Long catId) {
+        getExistingCat(caretakerId, catId);
+        return catHealthRecordMapper.selectList(new LambdaQueryWrapper<CatHealthRecord>()
+                .eq(CatHealthRecord::getCatId, catId)
+                .eq(CatHealthRecord::getDeleted, 0)
+                .isNotNull(CatHealthRecord::getWeight)
+                .orderByAsc(CatHealthRecord::getRecordDate)
+                .orderByAsc(CatHealthRecord::getId))
+            .stream()
+            .map(record -> new CatWeightTrendPoint(record.getRecordDate().toString(), record.getWeight()))
+            .toList();
+    }
+
     @Transactional
     public void deleteCat(Long caretakerId, Long id) {
         getExistingCat(caretakerId, id);
         jdbcTemplate.update("DELETE FROM cat_schedule WHERE cat_id = ?", id);
         jdbcTemplate.update("DELETE FROM reservation_cat WHERE cat_id = ?", id);
+        jdbcTemplate.update("DELETE FROM cat_health_record WHERE cat_id = ?", id);
         jdbcTemplate.update("DELETE FROM cat WHERE id = ?", id);
     }
 
@@ -123,6 +203,45 @@ public class CatService {
         cat.setVaccinium(trimToNull(request.vaccinium()));
         cat.setPhotoUrl(trimToNull(request.photoUrl()));
         cat.setDescription(trimToNull(request.description()));
+    }
+
+    private void insertHealthRecordFromCat(Cat cat, Long caretakerId, String note) {
+        if (cat.getWeight() == null && !StringUtils.hasText(cat.getVaccinium()) && !StringUtils.hasText(cat.getInteract())) {
+            return;
+        }
+        CatHealthRecord record = new CatHealthRecord();
+        record.setCatId(cat.getId());
+        record.setStoreId(cat.getStoreId());
+        record.setRecordDate(LocalDate.now());
+        record.setWeight(cat.getWeight());
+        record.setVaccinium(cat.getVaccinium());
+        record.setInteract(cat.getInteract());
+        record.setNote(note);
+        record.setRecordedBy(caretakerId);
+        record.setDeleted(0);
+        catHealthRecordMapper.insert(record);
+    }
+
+    private boolean healthSnapshotChanged(BigDecimal oldWeight, String oldVaccinium, String oldInteract, Cat cat) {
+        return !sameDecimal(oldWeight, cat.getWeight())
+            || !Objects.equals(oldVaccinium, cat.getVaccinium())
+            || !Objects.equals(oldInteract, cat.getInteract());
+    }
+
+    private boolean sameDecimal(BigDecimal left, BigDecimal right) {
+        if (left == null || right == null) {
+            return left == right;
+        }
+        return left.compareTo(right) == 0;
+    }
+
+    private void validateHealthRecordContent(CatHealthRecordRequest request) {
+        if (request.weight() == null
+            && !StringUtils.hasText(request.vaccinium())
+            && !StringUtils.hasText(request.interact())
+            && !StringUtils.hasText(request.note())) {
+            throw new BizException(4106, "请至少填写体重、疫苗、互动记录或备注");
+        }
     }
 
     private List<Long> resolveStoreIds(Long caretakerId) {
@@ -198,6 +317,20 @@ public class CatService {
             cat.getPhotoUrl(),
             cat.getDescription(),
             cat.getStatus()
+        );
+    }
+
+    private CatHealthRecordResponse toHealthRecordResponse(CatHealthRecord record) {
+        return new CatHealthRecordResponse(
+            record.getId(),
+            record.getCatId(),
+            record.getRecordDate(),
+            record.getWeight(),
+            record.getVaccinium(),
+            record.getInteract(),
+            record.getNote(),
+            record.getRecordedBy(),
+            record.getCreatedAt()
         );
     }
 }

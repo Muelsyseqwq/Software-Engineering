@@ -168,7 +168,7 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="detailVisible" title="猫咪档案详情" width="680px" class="cat-dialog">
+    <el-dialog v-model="detailVisible" title="猫咪档案详情" width="920px" class="cat-dialog" @closed="handleDetailClosed">
       <div v-if="currentCat" class="cat-detail">
         <div class="detail-cover">
           <el-avatar :size="112" :src="currentCat.photoUrl || undefined">{{ currentCat.name?.slice(0, 1) || '猫' }}</el-avatar>
@@ -192,27 +192,90 @@
           </el-descriptions-item>
           <el-descriptions-item label="描述">{{ currentCat.description || '暂无描述' }}</el-descriptions-item>
         </el-descriptions>
+
+        <div class="health-panel">
+          <div class="health-panel__header">
+            <div>
+              <h3>健康趋势</h3>
+              <p>按记录日期展示体重变化，并沉淀疫苗与互动记录。</p>
+            </div>
+            <el-button type="primary" size="small" @click="openRecordDialog">新增健康记录</el-button>
+          </div>
+
+          <div v-loading="recordLoading" class="chart-card">
+            <div v-if="weightTrend.length" ref="weightChartRef" class="weight-chart" />
+            <el-empty v-else description="暂无体重趋势记录" />
+          </div>
+
+          <el-timeline v-if="healthRecords.length" class="health-timeline">
+            <el-timeline-item v-for="record in healthRecords" :key="record.id" :timestamp="formatRecordDate(record.recordDate)" placement="top">
+              <div class="record-card">
+                <p v-if="record.weight"><strong>体重：</strong>{{ weightLabel(record.weight) }}</p>
+                <p v-if="record.vaccinium"><strong>疫苗：</strong>{{ record.vaccinium }}</p>
+                <p v-if="record.interact"><strong>互动：</strong>{{ record.interact }}</p>
+                <p v-if="record.note"><strong>备注：</strong>{{ record.note }}</p>
+              </div>
+            </el-timeline-item>
+          </el-timeline>
+          <el-empty v-else description="暂无健康记录" />
+        </div>
       </div>
+    </el-dialog>
+
+    <el-dialog v-model="recordDialogVisible" title="新增健康记录" width="560px" class="cat-dialog">
+      <el-form :model="recordForm" label-position="top">
+        <el-form-item label="记录日期">
+          <el-date-picker
+            v-model="recordForm.recordDate"
+            type="date"
+            value-format="YYYY-MM-DD"
+            placeholder="选择记录日期"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="体重（kg）">
+          <el-input-number v-model="recordForm.weight" :min="0.2" :max="20" :precision="2" :step="0.1" controls-position="right" />
+        </el-form-item>
+        <el-form-item label="疫苗信息">
+          <el-input v-model="recordForm.vaccinium" type="textarea" rows="2" placeholder="例如：猫三联加强针" />
+        </el-form-item>
+        <el-form-item label="互动记录">
+          <el-input v-model="recordForm.interact" type="textarea" rows="2" placeholder="例如：喜欢逗猫棒，精神状态良好" />
+        </el-form-item>
+        <el-form-item label="备注">
+          <el-input v-model="recordForm.note" type="textarea" rows="2" placeholder="例如：食欲正常，建议持续观察" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="recordDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="recordSubmitting" @click="handleRecordSubmit">保存记录</el-button>
+      </template>
     </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadRequestOptions } from 'element-plus'
+import * as echarts from 'echarts'
 import {
   createCat,
+  createCatHealthRecord,
   deleteCat,
   fetchCat,
+  fetchCatHealthRecords,
+  fetchCatWeightTrend,
   fetchCats,
   updateCat,
   updateCatHealthStatus,
   updateCatStatus,
   uploadCatPhoto,
+  type CatHealthRecord,
   type CatHealthStatus,
   type CatProfile,
   type CatStatus,
+  type CatWeightTrendPoint,
 } from '@/api/cat'
 
 const healthStatusOptions: Array<{ label: string; value: CatHealthStatus }> = [
@@ -242,7 +305,15 @@ const dialogVisible = ref(false)
 const detailVisible = ref(false)
 const editingId = ref<number>()
 const currentCat = ref<CatProfile>()
+const healthRecords = ref<CatHealthRecord[]>([])
+const weightTrend = ref<CatWeightTrendPoint[]>([])
+const recordLoading = ref(false)
+const recordDialogVisible = ref(false)
+const recordSubmitting = ref(false)
+const weightChartRef = ref<HTMLDivElement | null>(null)
+let weightChart: echarts.ECharts | null = null
 const form = reactive<CatProfile>(createEmptyForm())
+const recordForm = reactive<CatHealthRecord>(createEmptyRecordForm())
 
 const healthyCount = computed(() => cats.value.filter((cat) => normalizeHealthStatus(cat.healthStatus) === '健康').length)
 const activeCount = computed(() => cats.value.filter((cat) => normalizeCatStatus(cat.status) === 'AVAILABLE').length)
@@ -261,6 +332,16 @@ function createEmptyForm(): CatProfile {
     photoUrl: '',
     description: '',
     status: 'AVAILABLE',
+  }
+}
+
+function createEmptyRecordForm(): CatHealthRecord {
+  return {
+    recordDate: todayText(),
+    weight: undefined,
+    vaccinium: '',
+    interact: '',
+    note: '',
   }
 }
 
@@ -298,14 +379,73 @@ async function openDetailDialog(row: CatProfile) {
   if (!row.id) return
   try {
     const detail = await fetchCat(row.id)
-    currentCat.value = {
-      ...detail,
-      healthStatus: normalizeHealthStatus(detail.healthStatus),
-      status: normalizeCatStatus(detail.status),
-    }
+    currentCat.value = normalizeCatProfile(detail)
     detailVisible.value = true
+    await nextTick()
+    await loadHealthPanel(row.id)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '读取猫咪详情失败')
+  }
+}
+
+async function loadHealthPanel(catId: number) {
+  recordLoading.value = true
+  try {
+    const [records, trend] = await Promise.all([
+      fetchCatHealthRecords(catId),
+      fetchCatWeightTrend(catId),
+    ])
+    healthRecords.value = records
+    weightTrend.value = trend
+    await nextTick()
+    renderWeightChart()
+  } catch (error) {
+    ElMessage.warning(error instanceof Error ? error.message : '读取健康记录失败')
+  } finally {
+    recordLoading.value = false
+  }
+}
+
+function openRecordDialog() {
+  Object.assign(recordForm, createEmptyRecordForm(), {
+    weight: currentCat.value?.weight,
+  })
+  recordDialogVisible.value = true
+}
+
+async function handleRecordSubmit() {
+  if (!currentCat.value?.id) return
+  const hasContent =
+    recordForm.weight !== undefined && recordForm.weight !== null
+    || Boolean(recordForm.vaccinium?.trim())
+    || Boolean(recordForm.interact?.trim())
+    || Boolean(recordForm.note?.trim())
+  if (!hasContent) {
+    ElMessage.warning('请至少填写体重、疫苗、互动记录或备注中的一项')
+    return
+  }
+  if (!recordForm.recordDate) {
+    ElMessage.warning('请选择记录日期')
+    return
+  }
+  if (recordForm.weight !== undefined && recordForm.weight !== null && (recordForm.weight < 0.2 || recordForm.weight > 20)) {
+    ElMessage.warning('体重需要在 0.20kg 到 20.00kg 之间')
+    return
+  }
+
+  recordSubmitting.value = true
+  try {
+    const catId = currentCat.value.id
+    await createCatHealthRecord(catId, recordForm)
+    ElMessage.success('健康记录已保存')
+    recordDialogVisible.value = false
+    const detail = await fetchCat(catId)
+    currentCat.value = normalizeCatProfile(detail)
+    await Promise.all([loadHealthPanel(catId), loadCats()])
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '保存健康记录失败')
+  } finally {
+    recordSubmitting.value = false
   }
 }
 
@@ -404,6 +544,73 @@ async function handleDelete(id?: number) {
   }
 }
 
+function renderWeightChart() {
+  if (!weightTrend.value.length) {
+    disposeWeightChart()
+    return
+  }
+  if (!weightChartRef.value) return
+  disposeWeightChart()
+  weightChart = echarts.init(weightChartRef.value)
+  weightChart.setOption({
+    grid: { left: 48, right: 22, top: 28, bottom: 34 },
+    tooltip: {
+      trigger: 'axis',
+      formatter: (params: unknown) => {
+        const list = Array.isArray(params) ? params : [params]
+        const point = list[0] as { axisValue?: string; value?: number | string }
+        return `${point.axisValue || ''}<br/>体重：${Number(point.value || 0).toFixed(2)} kg`
+      },
+    },
+    xAxis: {
+      type: 'category',
+      data: weightTrend.value.map((item) => item.label),
+      axisLine: { lineStyle: { color: '#e7c99b' } },
+      axisLabel: { color: '#8c7057' },
+    },
+    yAxis: {
+      type: 'value',
+      name: 'kg',
+      min: (value: { min: number }) => Math.max(0, Math.floor((value.min - 0.5) * 10) / 10),
+      axisLabel: { color: '#8c7057' },
+      splitLine: { lineStyle: { color: 'rgba(154, 90, 44, 0.12)' } },
+    },
+    series: [{
+      name: '体重',
+      type: 'line',
+      smooth: true,
+      data: weightTrend.value.map((item) => Number(item.value)),
+      areaStyle: { color: 'rgba(227, 163, 58, 0.18)' },
+      lineStyle: { color: '#d97706', width: 3 },
+      itemStyle: { color: '#9a5a2c' },
+      symbolSize: 8,
+    }],
+  })
+}
+
+function resizeWeightChart() {
+  weightChart?.resize()
+}
+
+function disposeWeightChart() {
+  weightChart?.dispose()
+  weightChart = null
+}
+
+function handleDetailClosed() {
+  disposeWeightChart()
+  healthRecords.value = []
+  weightTrend.value = []
+}
+
+function normalizeCatProfile(cat: CatProfile): CatProfile {
+  return {
+    ...cat,
+    healthStatus: normalizeHealthStatus(cat.healthStatus),
+    status: normalizeCatStatus(cat.status),
+  }
+}
+
 function normalizeHealthStatus(value?: string): CatHealthStatus {
   if (value === 'OBSERVING') return '观察中'
   if (value === 'TREATMENT') return '治疗中'
@@ -435,6 +642,14 @@ function weightLabel(value?: number) {
   return value === undefined || value === null ? '待填写' : `${Number(value).toFixed(2)} kg`
 }
 
+function formatRecordDate(value?: string) {
+  return value || '未填写日期'
+}
+
+function todayText() {
+  return new Date().toISOString().slice(0, 10)
+}
+
 function healthTagType(value?: string) {
   const normalized = normalizeHealthStatus(value)
   if (normalized === '健康') return 'success'
@@ -452,7 +667,15 @@ function statusTagType(value?: string) {
   return 'info'
 }
 
-onMounted(loadCats)
+onMounted(() => {
+  loadCats()
+  window.addEventListener('resize', resizeWeightChart)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeWeightChart)
+  disposeWeightChart()
+})
 </script>
 
 <style scoped>
@@ -614,6 +837,68 @@ onMounted(loadCats)
 .detail-cover h2 { margin: 0; font-family: Georgia, 'Times New Roman', serif; font-size: 30px; }
 .detail-cover p:last-child { margin: 6px 0 0; color: var(--muted); }
 .cat-detail :deep(.el-descriptions) { width: 100%; }
+
+.health-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 4px;
+}
+
+.health-panel__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.health-panel__header h3 {
+  margin: 0;
+  color: var(--coffee);
+  font-size: 20px;
+}
+
+.health-panel__header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-card {
+  min-height: 300px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #fff8ec;
+}
+
+.weight-chart {
+  width: 100%;
+  height: 280px;
+}
+
+.health-timeline {
+  padding: 8px 4px 0;
+}
+
+.record-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.record-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.record-card strong {
+  color: var(--coffee);
+}
+
 .cat-dialog :deep(.el-dialog) { border-radius: 24px; overflow: hidden; }
 .cat-dialog :deep(.el-dialog__header) { padding: 22px 24px 10px; }
 .cat-dialog :deep(.el-dialog__body) { padding: 14px 24px 4px; }
@@ -625,5 +910,6 @@ onMounted(loadCats)
   .insight-grid { grid-template-columns: 1fr; }
   .photo-editor, .form-grid { grid-template-columns: 1fr; }
   .photo-frame { width: 100%; }
+  .health-panel__header { display: grid; }
 }
 </style>
