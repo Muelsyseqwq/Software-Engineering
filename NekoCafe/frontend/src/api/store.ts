@@ -14,6 +14,13 @@ export interface StoreSummary {
   availableTableCount: number
 }
 
+export interface NearbyStore extends StoreSummary {
+  latitude: number
+  longitude: number
+  distanceKm: number
+  distanceText: string
+}
+
 export interface TableSummary {
   id: number
   tableNo: string
@@ -28,6 +35,11 @@ export interface StoreDetail extends Omit<StoreSummary, 'availableTableCount'> {
 
 export async function fetchStores() {
   const { data } = await http.get<ApiResult<StoreSummary[]>>('/store')
+  return data.data
+}
+
+export async function fetchNearbyStores(params: { lat: number; lng: number }) {
+  const { data } = await http.get<ApiResult<NearbyStore[]>>('/store/nearby', { params })
   return data.data
 }
 

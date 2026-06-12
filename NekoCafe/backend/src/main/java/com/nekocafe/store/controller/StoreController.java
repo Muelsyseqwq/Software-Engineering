@@ -2,13 +2,16 @@ package com.nekocafe.store.controller;
 
 import com.nekocafe.common.result.ApiResult;
 import com.nekocafe.store.service.StoreService;
+import com.nekocafe.store.service.StoreService.NearbyStoreResponse;
 import com.nekocafe.store.service.StoreService.StoreDetailResponse;
 import com.nekocafe.store.service.StoreService.StoreSummaryResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +33,14 @@ public class StoreController {
     @GetMapping
     public ApiResult<List<StoreSummaryResponse>> list() {
         return ApiResult.ok(storeService.listStores());
+    }
+
+    @GetMapping("/nearby")
+    public ApiResult<List<NearbyStoreResponse>> nearby(
+        @RequestParam BigDecimal lat,
+        @RequestParam BigDecimal lng
+    ) {
+        return ApiResult.ok(storeService.nearbyStores(lat, lng));
     }
 
     @GetMapping("/{id}")
