@@ -48,8 +48,7 @@
           <el-select v-model="catStatusFilter" placeholder="全部状态" clearable style="width: 160px">
             <el-option label="可互动" value="AVAILABLE" />
             <el-option label="休息中" value="RESTING" />
-            <el-option label="生病/不可互动" value="SICK" />
-            <el-option label="下架" value="OFFLINE" />
+            <el-option label="停用" value="DISABLED" />
           </el-select>
           <el-button type="primary" @click="loadCats">查询</el-button>
         </div>
@@ -173,8 +172,7 @@ function translateCatStatus(status: string) {
   const map: Record<string, string> = {
     AVAILABLE: '可互动',
     RESTING: '休息中',
-    SICK: '生病/不可互动',
-    OFFLINE: '下架'
+    DISABLED: '停用'
   }
   return map[status] || status
 }
@@ -192,8 +190,7 @@ function catStatusTagType(status: string) {
   switch (status) {
     case 'AVAILABLE': return 'success'
     case 'RESTING': return 'warning'
-    case 'SICK': return 'danger'
-    case 'OFFLINE': return 'info'
+    case 'DISABLED': return 'info'
     default: return ''
   }
 }

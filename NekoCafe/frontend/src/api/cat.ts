@@ -1,7 +1,7 @@
 import { http } from './http'
 import type { ApiResult } from '@/types/api'
 
-export type CatStatus = 'AVAILABLE' | 'RESTING' | 'ADOPTED'
+export type CatStatus = 'AVAILABLE' | 'RESTING' | 'DISABLED'
 export type CatHealthStatus = '健康' | '观察中' | '治疗中' | '恢复中'
 export type CatGender = 'MALE' | 'FEMALE' | 'UNKNOWN'
 
