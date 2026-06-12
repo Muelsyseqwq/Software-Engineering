@@ -39,7 +39,7 @@
         </div>
         <div class="actions">
           <el-button @click="router.push(`/stores/${store.id}`)">查看详情</el-button>
-          <el-button type="primary" @click="router.push(`/reservations/new?storeId=${store.id}`)">立即预约</el-button>
+          <el-button type="primary" :disabled="store.status !== 'OPEN'" @click="router.push(`/reservations/new?storeId=${store.id}`)">立即预约</el-button>
         </div>
       </el-card>
     </div>
@@ -54,7 +54,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchNearbyStores, fetchStores, type NearbyStore, type StoreSummary } from '@/api/store'
 
-const DEMO_LOCATION = { lat: 30.246, lng: 120.15, label: '杭州西湖演示位置' }
+const DEMO_LOCATION = { lat: 40.0051, lng: 116.3442, label: '北京林业大学演示位置' }
 
 const router = useRouter()
 const loading = ref(false)
@@ -75,7 +75,7 @@ function formatTime(value: string) {
 }
 
 function statusText(status: string) {
-  return status === 'OPEN' ? '营业中' : '休息中'
+  return status === 'OPEN' ? '营业中' : status === 'PREPARING' ? '筹备中' : '休息中'
 }
 
 function isNearbyStore(store: StoreSummary | NearbyStore): store is NearbyStore {

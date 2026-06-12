@@ -24,6 +24,7 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   // Customer
   { path: '/customer', label: '顾客首页', icon: '🐱', hint: '会员积分与活动总览', roles: ['CUSTOMER'] },
   { path: '/stores', label: '门店浏览', icon: '☕', hint: '寻找今日猫咖座位', roles: ['CUSTOMER'], guest: true },
+  { path: '/customer/recommendations', label: '智能推荐', icon: '✨', hint: '根据偏好推荐门店与猫咪体验', roles: ['CUSTOMER'] },
   { path: '/customer/activities', label: '活动中心', icon: '🎉', hint: '优惠与娱乐活动', roles: ['CUSTOMER'] },
   { path: '/reservations/me', label: '我的预约', icon: '📒', hint: '查看猫爪行程', roles: ['CUSTOMER'] },
   { path: '/customer/orders', label: '我的订单', icon: '📦', hint: '支付、退款与评价', roles: ['CUSTOMER'] },
