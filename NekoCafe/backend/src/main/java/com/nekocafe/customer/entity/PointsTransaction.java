@@ -14,6 +14,7 @@ public class PointsTransaction {
     private Long userId;
     private Long memberAccountId;
     private Long orderId;
+    private Long rewardRedemptionId;
     private String type;
     private Integer points;
     private Integer balanceAfter;
@@ -28,6 +29,8 @@ public class PointsTransaction {
     public void setMemberAccountId(Long memberAccountId) { this.memberAccountId = memberAccountId; }
     public Long getOrderId() { return orderId; }
     public void setOrderId(Long orderId) { this.orderId = orderId; }
+    public Long getRewardRedemptionId() { return rewardRedemptionId; }
+    public void setRewardRedemptionId(Long rewardRedemptionId) { this.rewardRedemptionId = rewardRedemptionId; }
     public String getType() { return type; }
     public void setType(String type) { this.type = type; }
     public Integer getPoints() { return points; }

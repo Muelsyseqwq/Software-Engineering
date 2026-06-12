@@ -7,10 +7,13 @@ import com.nekocafe.customer.service.CustomerService.HomeResponse;
 import com.nekocafe.customer.service.CustomerService.PointsSummaryResponse;
 import com.nekocafe.customer.service.CustomerService.PreferenceRequest;
 import com.nekocafe.customer.service.CustomerService.PreferenceResponse;
+import com.nekocafe.customer.service.CustomerService.RedeemRewardResponse;
 import com.nekocafe.customer.service.CustomerService.RefundRequestPayload;
 import com.nekocafe.customer.service.CustomerService.RefundResponse;
 import com.nekocafe.customer.service.CustomerService.ReviewRequest;
 import com.nekocafe.customer.service.CustomerService.ReviewResponse;
+import com.nekocafe.customer.service.CustomerService.RewardCatalogResponse;
+import com.nekocafe.customer.service.CustomerService.RewardRedemptionResponse;
 import com.nekocafe.security.AuthPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -52,6 +55,24 @@ public class CustomerController {
     @GetMapping("/points")
     public ApiResult<PointsSummaryResponse> points(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResult.ok(customerService.points(principal.userId()));
+    }
+
+    @GetMapping("/rewards")
+    public ApiResult<List<RewardCatalogResponse>> rewards(@AuthenticationPrincipal AuthPrincipal principal) {
+        return ApiResult.ok(customerService.rewards(principal.userId()));
+    }
+
+    @PostMapping("/rewards/{rewardId}/redeem")
+    public ApiResult<RedeemRewardResponse> redeemReward(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long rewardId
+    ) {
+        return ApiResult.ok(customerService.redeemReward(principal.userId(), rewardId));
+    }
+
+    @GetMapping("/redemptions/me")
+    public ApiResult<List<RewardRedemptionResponse>> myRedemptions(@AuthenticationPrincipal AuthPrincipal principal) {
+        return ApiResult.ok(customerService.myRedemptions(principal.userId()));
     }
 
     @GetMapping("/preferences")

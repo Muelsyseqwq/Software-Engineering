@@ -24,6 +24,7 @@ export interface CustomerActivityResponse {
 export interface PointsTransactionRow {
   id: number
   orderId?: number
+  rewardRedemptionId?: number
   type: string
   points: number
   balanceAfter: number
@@ -37,6 +38,36 @@ export interface PointsSummaryResponse {
   points: number
   totalSpent: number
   transactions: PointsTransactionRow[]
+}
+
+export interface RewardCatalogResponse {
+  id: number
+  name: string
+  description?: string
+  pointsCost: number
+  rewardType: 'COUPON' | 'SERVICE' | 'ITEM' | string
+  coverUrl?: string
+  stock?: number | null
+  status: string
+  validFrom?: string | null
+  validTo?: string | null
+}
+
+export interface RewardRedemptionResponse {
+  id: number
+  redemptionNo: string
+  rewardId: number
+  rewardName: string
+  pointsCost: number
+  status: string
+  redeemedAt: string
+  usedAt?: string | null
+}
+
+export interface RedeemRewardResponse {
+  redemption: RewardRedemptionResponse
+  balanceAfter: number
+  reward: RewardCatalogResponse
 }
 
 export interface PreferenceRequest {
@@ -113,6 +144,21 @@ export async function fetchCustomerActivities(params?: { type?: string; storeId?
 
 export async function fetchCustomerPoints() {
   const { data } = await http.get<ApiResult<PointsSummaryResponse>>('/customer/points')
+  return data.data
+}
+
+export async function fetchRewardCatalog() {
+  const { data } = await http.get<ApiResult<RewardCatalogResponse[]>>('/customer/rewards')
+  return data.data
+}
+
+export async function redeemReward(rewardId: number) {
+  const { data } = await http.post<ApiResult<RedeemRewardResponse>>(`/customer/rewards/${rewardId}/redeem`)
+  return data.data
+}
+
+export async function fetchMyRedemptions() {
+  const { data } = await http.get<ApiResult<RewardRedemptionResponse[]>>('/customer/redemptions/me')
   return data.data
 }
 

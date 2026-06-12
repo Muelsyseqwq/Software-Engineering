@@ -27,10 +27,10 @@
         </div>
         <div class="quick-actions">
           <router-link to="/stores">☕ 门店浏览</router-link>
-          <router-link to="/reservations/new">🐾 创建预约</router-link>
-          <router-link to="/orders/checkout">🧾 点单结算</router-link>
+          <router-link to="/customer/activities">🎉 活动中心</router-link>
           <router-link to="/customer/orders">📦 我的订单</router-link>
-          <router-link to="/customer/profile">🎫 会员偏好</router-link>
+          <router-link to="/reservations/me">📒 我的预约</router-link>
+          <router-link to="/customer/profile">🎫 去会员页兑换</router-link>
         </div>
       </section>
 

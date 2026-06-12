@@ -9,10 +9,14 @@ import com.nekocafe.common.exception.BizException;
 import com.nekocafe.customer.entity.PointsTransaction;
 import com.nekocafe.customer.entity.RefundRequest;
 import com.nekocafe.customer.entity.Review;
+import com.nekocafe.customer.entity.RewardCatalog;
+import com.nekocafe.customer.entity.RewardRedemption;
 import com.nekocafe.customer.entity.UserPreference;
 import com.nekocafe.customer.mapper.PointsTransactionMapper;
 import com.nekocafe.customer.mapper.RefundRequestMapper;
 import com.nekocafe.customer.mapper.ReviewMapper;
+import com.nekocafe.customer.mapper.RewardCatalogMapper;
+import com.nekocafe.customer.mapper.RewardRedemptionMapper;
 import com.nekocafe.customer.mapper.UserPreferenceMapper;
 import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.mapper.FoodOrderMapper;
@@ -46,6 +50,9 @@ public class CustomerService {
     private static final String APPLIED = "APPLIED";
     private static final String NONE = "NONE";
     private static final String EARN = "EARN";
+    private static final String REDEEM = "REDEEM";
+    private static final String ACTIVE = "ACTIVE";
+    private static final String REDEEMED = "REDEEMED";
     private static final String PUBLISHED = "PUBLISHED";
     private static final String ACCEPTED = "ACCEPTED";
 
@@ -54,6 +61,8 @@ public class CustomerService {
     private final PointsTransactionMapper pointsTransactionMapper;
     private final UserPreferenceMapper userPreferenceMapper;
     private final MemberAccountMapper memberAccountMapper;
+    private final RewardCatalogMapper rewardCatalogMapper;
+    private final RewardRedemptionMapper rewardRedemptionMapper;
     private final PromotionActivityMapper activityMapper;
     private final ActivityStoreMapper activityStoreMapper;
     private final StoreMapper storeMapper;
@@ -66,6 +75,8 @@ public class CustomerService {
         PointsTransactionMapper pointsTransactionMapper,
         UserPreferenceMapper userPreferenceMapper,
         MemberAccountMapper memberAccountMapper,
+        RewardCatalogMapper rewardCatalogMapper,
+        RewardRedemptionMapper rewardRedemptionMapper,
         PromotionActivityMapper activityMapper,
         ActivityStoreMapper activityStoreMapper,
         StoreMapper storeMapper,
@@ -77,6 +88,8 @@ public class CustomerService {
         this.pointsTransactionMapper = pointsTransactionMapper;
         this.userPreferenceMapper = userPreferenceMapper;
         this.memberAccountMapper = memberAccountMapper;
+        this.rewardCatalogMapper = rewardCatalogMapper;
+        this.rewardRedemptionMapper = rewardRedemptionMapper;
         this.activityMapper = activityMapper;
         this.activityStoreMapper = activityStoreMapper;
         this.storeMapper = storeMapper;
@@ -156,6 +169,94 @@ public class CustomerService {
             account.getTotalSpent() == null ? BigDecimal.ZERO : account.getTotalSpent(),
             transactions
         );
+    }
+
+    public List<RewardCatalogResponse> rewards(Long userId) {
+        ensureLogin(userId);
+        LocalDateTime now = LocalDateTime.now();
+        return rewardCatalogMapper.selectList(new LambdaQueryWrapper<RewardCatalog>()
+                .eq(RewardCatalog::getDeleted, 0)
+                .eq(RewardCatalog::getStatus, ACTIVE)
+                .and(wrapper -> wrapper.isNull(RewardCatalog::getValidFrom).or().le(RewardCatalog::getValidFrom, now))
+                .and(wrapper -> wrapper.isNull(RewardCatalog::getValidTo).or().ge(RewardCatalog::getValidTo, now))
+                .orderByAsc(RewardCatalog::getPointsCost)
+                .orderByAsc(RewardCatalog::getId))
+            .stream()
+            .map(this::toRewardResponse)
+            .toList();
+    }
+
+    @Transactional
+    public RedeemRewardResponse redeemReward(Long userId, Long rewardId) {
+        ensureLogin(userId);
+        if (rewardId == null) {
+            throw new BizException(3341, "请选择要兑换的奖励");
+        }
+        RewardCatalog reward = rewardCatalogMapper.selectById(rewardId);
+        validateRewardAvailable(reward);
+
+        MemberAccount account = loadOrCreateMemberAccount(userId);
+        int cost = reward.getPointsCost() == null ? 0 : reward.getPointsCost();
+        if (cost <= 0) {
+            throw new BizException(3342, "奖励积分配置异常");
+        }
+        if (reward.getStock() != null && reward.getStock() <= 0) {
+            throw new BizException(3343, "该奖励已兑完");
+        }
+        if (account.getPoints() == null || account.getPoints() < cost) {
+            throw new BizException(3344, "积分不足，暂时不能兑换");
+        }
+        if (reward.getStock() != null && rewardCatalogMapper.decreaseStockIfAvailable(reward.getId()) == 0) {
+            throw new BizException(3343, "该奖励已兑完");
+        }
+        if (memberAccountMapper.deductPointsIfEnough(account.getId(), cost) == 0) {
+            throw new BizException(3344, "积分不足，暂时不能兑换");
+        }
+
+        MemberAccount updatedAccount = memberAccountMapper.selectById(account.getId());
+        int balanceAfter = updatedAccount == null || updatedAccount.getPoints() == null ? 0 : updatedAccount.getPoints();
+
+        RewardRedemption redemption = new RewardRedemption();
+        redemption.setRedemptionNo(generateRedemptionNo(userId));
+        redemption.setUserId(userId);
+        redemption.setMemberAccountId(account.getId());
+        redemption.setRewardId(reward.getId());
+        redemption.setRewardName(reward.getName());
+        redemption.setPointsCost(cost);
+        redemption.setStatus(REDEEMED);
+        redemption.setRedeemedAt(LocalDateTime.now());
+        redemption.setDeleted(0);
+        rewardRedemptionMapper.insert(redemption);
+
+        PointsTransaction transaction = new PointsTransaction();
+        transaction.setUserId(userId);
+        transaction.setMemberAccountId(account.getId());
+        transaction.setRewardRedemptionId(redemption.getId());
+        transaction.setType(REDEEM);
+        transaction.setPoints(-cost);
+        transaction.setBalanceAfter(balanceAfter);
+        transaction.setDescription("兑换 " + reward.getName());
+        pointsTransactionMapper.insert(transaction);
+
+        RewardCatalog latestReward = rewardCatalogMapper.selectById(reward.getId());
+        RewardRedemption savedRedemption = rewardRedemptionMapper.selectById(redemption.getId());
+        return new RedeemRewardResponse(
+            toRedemptionResponse(savedRedemption == null ? redemption : savedRedemption),
+            balanceAfter,
+            latestReward == null ? toRewardResponse(reward) : toRewardResponse(latestReward)
+        );
+    }
+
+    public List<RewardRedemptionResponse> myRedemptions(Long userId) {
+        ensureLogin(userId);
+        return rewardRedemptionMapper.selectList(new LambdaQueryWrapper<RewardRedemption>()
+                .eq(RewardRedemption::getUserId, userId)
+                .eq(RewardRedemption::getDeleted, 0)
+                .orderByDesc(RewardRedemption::getRedeemedAt)
+                .orderByDesc(RewardRedemption::getId))
+            .stream()
+            .map(this::toRedemptionResponse)
+            .toList();
     }
 
     public List<PreferenceResponse> preferences(Long userId) {
@@ -307,6 +408,22 @@ public class CustomerService {
         pointsTransactionMapper.insert(transaction);
     }
 
+    private void validateRewardAvailable(RewardCatalog reward) {
+        if (reward == null || Objects.equals(reward.getDeleted(), 1)) {
+            throw new BizException(3342, "奖励不存在或已下架");
+        }
+        if (!ACTIVE.equals(reward.getStatus())) {
+            throw new BizException(3342, "奖励暂不可兑换");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (reward.getValidFrom() != null && reward.getValidFrom().isAfter(now)) {
+            throw new BizException(3342, "奖励还未开始兑换");
+        }
+        if (reward.getValidTo() != null && reward.getValidTo().isBefore(now)) {
+            throw new BizException(3342, "奖励已过期");
+        }
+    }
+
     private HomeOrderStats buildOrderStats(List<OrderService.OrderResponse> orders) {
         long pendingPayment = orders.stream().filter(order -> "CREATED".equals(order.status())).count();
         long paid = orders.stream().filter(order -> PAID.equals(order.status())).count();
@@ -391,11 +508,40 @@ public class CustomerService {
         return new PointsTransactionRow(
             transaction.getId(),
             transaction.getOrderId(),
+            transaction.getRewardRedemptionId(),
             transaction.getType(),
             transaction.getPoints(),
             transaction.getBalanceAfter(),
             transaction.getDescription(),
             transaction.getCreatedAt()
+        );
+    }
+
+    private RewardCatalogResponse toRewardResponse(RewardCatalog reward) {
+        return new RewardCatalogResponse(
+            reward.getId(),
+            reward.getName(),
+            reward.getDescription(),
+            reward.getPointsCost(),
+            reward.getRewardType(),
+            reward.getCoverUrl(),
+            reward.getStock(),
+            reward.getStatus(),
+            reward.getValidFrom(),
+            reward.getValidTo()
+        );
+    }
+
+    private RewardRedemptionResponse toRedemptionResponse(RewardRedemption redemption) {
+        return new RewardRedemptionResponse(
+            redemption.getId(),
+            redemption.getRedemptionNo(),
+            redemption.getRewardId(),
+            redemption.getRewardName(),
+            redemption.getPointsCost(),
+            redemption.getStatus(),
+            redemption.getRedeemedAt(),
+            redemption.getUsedAt()
         );
     }
 
@@ -437,6 +583,10 @@ public class CustomerService {
 
     private String generateRefundNo(Long userId) {
         return "R" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")) + userId;
+    }
+
+    private String generateRedemptionNo(Long userId) {
+        return "D" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")) + userId;
     }
 
     private void ensureLogin(Long userId) {
@@ -489,7 +639,33 @@ public class CustomerService {
         List<PointsTransactionRow> transactions
     ) {}
 
-    public record PointsTransactionRow(Long id, Long orderId, String type, Integer points, Integer balanceAfter, String description, LocalDateTime createdAt) {}
+    public record PointsTransactionRow(Long id, Long orderId, Long rewardRedemptionId, String type, Integer points, Integer balanceAfter, String description, LocalDateTime createdAt) {}
+
+    public record RewardCatalogResponse(
+        Long id,
+        String name,
+        String description,
+        Integer pointsCost,
+        String rewardType,
+        String coverUrl,
+        Integer stock,
+        String status,
+        LocalDateTime validFrom,
+        LocalDateTime validTo
+    ) {}
+
+    public record RewardRedemptionResponse(
+        Long id,
+        String redemptionNo,
+        Long rewardId,
+        String rewardName,
+        Integer pointsCost,
+        String status,
+        LocalDateTime redeemedAt,
+        LocalDateTime usedAt
+    ) {}
+
+    public record RedeemRewardResponse(RewardRedemptionResponse redemption, Integer balanceAfter, RewardCatalogResponse reward) {}
 
     public record PreferenceRequest(String preferenceType, String preferenceValue) {}
 

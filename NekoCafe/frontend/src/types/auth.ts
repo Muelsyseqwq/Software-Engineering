@@ -19,6 +19,13 @@ export interface RegisterRequest {
   preferences?: PreferenceRequest[]
 }
 
+export interface AuthAssignedStore {
+  id: number
+  name: string
+  city?: string | null
+  address?: string | null
+}
+
 export interface AuthUser {
   id: number
   username: string
@@ -29,6 +36,7 @@ export interface AuthUser {
   storeId?: number | null
   storeName?: string | null
   storeNames?: string[] | null
+  stores?: AuthAssignedStore[] | null
 }
 
 export interface AuthResponse {
