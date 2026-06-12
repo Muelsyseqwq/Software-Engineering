@@ -6,8 +6,16 @@
         <h1>选择今日猫咖据点</h1>
         <p>先看看营业时间、桌位余量和门店氛围，再挑一个适合撸猫的时段。</p>
       </div>
-      <el-button type="primary" :loading="loading" @click="loadStores">刷新门店</el-button>
+      <div class="header-actions">
+        <el-button :loading="locating" @click="loadNearbyByCurrentLocation">📍 距我最近</el-button>
+        <el-button @click="loadNearbyByDemoLocation">演示位置推荐</el-button>
+        <el-button type="primary" :loading="loading" @click="loadStores">刷新门店</el-button>
+      </div>
     </header>
+
+    <el-alert v-if="nearbyMode" class="nearby-tip" type="success" show-icon :closable="false">
+      <template #title>已按距离排序，当前位置：{{ locationLabel }}</template>
+    </el-alert>
 
     <el-input v-model.trim="keyword" class="search-box" size="large" placeholder="搜索城市、门店或地址" clearable />
 
@@ -27,6 +35,7 @@
           <span>🕙 {{ formatTime(store.openingTime) }} - {{ formatTime(store.closingTime) }}</span>
           <span>📞 {{ store.phone || '暂无电话' }}</span>
           <span>🪑 可预约桌位 {{ store.availableTableCount }} 张</span>
+          <span v-if="isNearbyStore(store)">📍 距你 {{ store.distanceText }}</span>
         </div>
         <div class="actions">
           <el-button @click="router.push(`/stores/${store.id}`)">查看详情</el-button>
@@ -43,12 +52,17 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { fetchStores, type StoreSummary } from '@/api/store'
+import { fetchNearbyStores, fetchStores, type NearbyStore, type StoreSummary } from '@/api/store'
+
+const DEMO_LOCATION = { lat: 30.246, lng: 120.15, label: '杭州西湖演示位置' }
 
 const router = useRouter()
 const loading = ref(false)
+const locating = ref(false)
+const nearbyMode = ref(false)
+const locationLabel = ref('')
 const keyword = ref('')
-const stores = ref<StoreSummary[]>([])
+const stores = ref<Array<StoreSummary | NearbyStore>>([])
 
 const filteredStores = computed(() => {
   const key = keyword.value.toLowerCase()
@@ -64,8 +78,14 @@ function statusText(status: string) {
   return status === 'OPEN' ? '营业中' : '休息中'
 }
 
+function isNearbyStore(store: StoreSummary | NearbyStore): store is NearbyStore {
+  return 'distanceText' in store
+}
+
 async function loadStores() {
   loading.value = true
+  nearbyMode.value = false
+  locationLabel.value = ''
   try {
     stores.value = await fetchStores()
   } catch (error) {
@@ -75,12 +95,53 @@ async function loadStores() {
   }
 }
 
+async function loadNearby(lat: number, lng: number, label: string) {
+  loading.value = true
+  try {
+    stores.value = await fetchNearbyStores({ lat, lng })
+    nearbyMode.value = true
+    locationLabel.value = label
+    ElMessage.success('已按距离为你推荐附近门店')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '附近门店加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function loadNearbyByDemoLocation() {
+  void loadNearby(DEMO_LOCATION.lat, DEMO_LOCATION.lng, DEMO_LOCATION.label)
+}
+
+function loadNearbyByCurrentLocation() {
+  if (!navigator.geolocation) {
+    ElMessage.warning('当前浏览器不支持定位，已使用演示位置')
+    loadNearbyByDemoLocation()
+    return
+  }
+  locating.value = true
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      locating.value = false
+      void loadNearby(position.coords.latitude, position.coords.longitude, '浏览器当前位置')
+    },
+    () => {
+      locating.value = false
+      ElMessage.warning('定位失败，已使用演示位置')
+      loadNearbyByDemoLocation()
+    },
+    { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 },
+  )
+}
+
 onMounted(loadStores)
 </script>
 
 <style scoped>
 .store-page { display: grid; gap: 20px; }
 .page-header { display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; }
+.header-actions { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.nearby-tip { border-radius: 14px; }
 .eyebrow { margin: 0 0 8px; color: #d97706; font-weight: 900; letter-spacing: 0.08em; }
 .page-header h1 { margin: 0 0 8px; color: #3b2618; }
 .page-header p { margin: 0; color: #7c5f4a; }
