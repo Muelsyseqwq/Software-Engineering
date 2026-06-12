@@ -51,6 +51,39 @@ export interface ReservationRow {
   createdAt: string
 }
 
+export interface ApplyQueuePayload {
+  storeId: number
+  partySize: number
+  contactName: string
+  contactPhone: string
+}
+
+export interface QueueTicket {
+  id: number
+  storeId: number
+  queueDate: string
+  queueNumber: number
+  partySize: number
+  status: string
+  contactName: string
+  contactPhone: string
+  calledAt?: string
+  seatedAt?: string
+  cancelledAt?: string
+  expiredAt?: string
+  createdAt?: string
+}
+
+export interface QueueStatus {
+  storeId: number
+  queueDate: string
+  currentNumber: number
+  nextNumber: number
+  waitingCount: number
+  myTicket?: QueueTicket
+  canApply: boolean
+}
+
 export async function fetchReservationSlots(params: ReservationSlotQuery) {
   const { data } = await http.get<ApiResult<ReservationSlot[]>>('/reservation/slots', { params })
   return data.data
@@ -68,5 +101,20 @@ export async function fetchMyReservations() {
 
 export async function cancelReservation(id: number | string) {
   const { data } = await http.post<ApiResult<ReservationRow>>(`/reservation/${id}/cancel`)
+  return data.data
+}
+
+export async function applyQueue(payload: ApplyQueuePayload) {
+  const { data } = await http.post<ApiResult<QueueTicket>>('/reservation/queue', payload)
+  return data.data
+}
+
+export async function fetchQueueStatus(storeId: number | string, partySize?: number) {
+  const { data } = await http.get<ApiResult<QueueStatus>>('/reservation/queue/status', { params: { storeId, partySize } })
+  return data.data
+}
+
+export async function cancelQueueTicket(id: number | string) {
+  const { data } = await http.post<ApiResult<QueueTicket>>(`/reservation/queue/${id}/cancel`)
   return data.data
 }

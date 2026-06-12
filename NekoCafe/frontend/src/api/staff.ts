@@ -43,6 +43,29 @@ export interface Cat {
   status: string
 }
 
+export interface StaffQueueTicket {
+  id: number
+  queueNumber: number
+  partySize: number
+  status: string
+  contactName: string
+  contactPhone: string
+  calledAt?: string
+  seatedAt?: string
+  expiredAt?: string
+  createdAt?: string
+}
+
+export interface StaffQueueStatus {
+  storeId: number
+  queueDate: string
+  currentNumber: number
+  nextNumber: number
+  waitingCount: number
+  calledTicket?: StaffQueueTicket
+  tickets: StaffQueueTicket[]
+}
+
 export async function fetchTodayReservations() {
   const { data } = await http.get<ApiResult<StaffReservationRow[]>>('/staff/reservations/today')
   return data.data
@@ -87,5 +110,25 @@ export async function updateTableStatus(id: number, status: string, reason?: str
   const { data } = await http.put<ApiResult<void>>(`/staff/tables/${id}/status`, null, {
     params: { status, reason }
   })
+  return data.data
+}
+
+export async function fetchStaffQueueStatus(storeId: number | string) {
+  const { data } = await http.get<ApiResult<StaffQueueStatus>>('/staff/queues/status', { params: { storeId } })
+  return data.data
+}
+
+export async function callNextQueueNumber(storeId: number | string) {
+  const { data } = await http.post<ApiResult<StaffQueueStatus>>(`/staff/queues/${storeId}/next`)
+  return data.data
+}
+
+export async function markQueueTicketSeated(ticketId: number | string) {
+  const { data } = await http.post<ApiResult<void>>(`/staff/queues/tickets/${ticketId}/seat`)
+  return data.data
+}
+
+export async function resetQueue(storeId: number | string) {
+  const { data } = await http.post<ApiResult<StaffQueueStatus>>(`/staff/queues/${storeId}/reset`)
   return data.data
 }

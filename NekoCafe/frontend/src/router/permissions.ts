@@ -26,6 +26,7 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   { path: '/stores', label: '门店浏览', icon: '☕', hint: '寻找今日猫咖座位', roles: ['CUSTOMER'], guest: true },
   { path: '/customer/activities', label: '活动中心', icon: '🎉', hint: '优惠与娱乐活动', roles: ['CUSTOMER'] },
   { path: '/reservations/new', label: '创建预约', icon: '🐾', hint: '锁定互动时段', roles: ['CUSTOMER'] },
+  { path: '/reservations/queue', label: '排队取号', icon: '🎟️', hint: '满座时领取等位号码', roles: ['CUSTOMER'] },
   { path: '/reservations/me', label: '我的预约', icon: '📒', hint: '查看猫爪行程', roles: ['CUSTOMER'] },
   { path: '/menu', label: '菜品点单', icon: '🍰', hint: '甜品饮品提前选', roles: ['CUSTOMER'], guest: true },
   { path: '/orders/checkout', label: '订单结算', icon: '🧾', hint: '确认订单与支付', roles: ['CUSTOMER'] },
@@ -33,6 +34,7 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   { path: '/customer/profile', label: '会员偏好', icon: '🎫', hint: '积分流水与喜好标签', roles: ['CUSTOMER'] },
   // Staff
   { path: '/staff', label: '店员后台', icon: '🛎️', hint: '前台值班总览', roles: ['STAFF'] },
+  { path: '/staff/queue', label: '排队叫号', icon: '📣', hint: '叫号、过号与重置', roles: ['STAFF'] },
   { path: '/staff/check-in', label: '预约签到', icon: '✅', hint: '核销到店顾客', roles: ['STAFF'] },
   { path: '/staff/orders', label: '订单履约', icon: '🥐', hint: '推进制作状态', roles: ['STAFF'] },
   { path: '/staff/table-cat-status', label: '桌位猫咪', icon: '🪑', hint: '桌位与猫咪状态', roles: ['STAFF'] },

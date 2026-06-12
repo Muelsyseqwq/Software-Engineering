@@ -1,0 +1,42 @@
+CREATE TABLE IF NOT EXISTS waiting_queue_counter (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  store_id BIGINT NOT NULL,
+  queue_date DATE NOT NULL,
+  current_number INT NOT NULL DEFAULT 0,
+  next_number INT NOT NULL DEFAULT 1,
+  reset_version INT NOT NULL DEFAULT 0,
+  reset_by BIGINT NULL,
+  reset_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  version INT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_waiting_queue_counter_store_date (store_id, queue_date),
+  KEY idx_waiting_queue_counter_store (store_id),
+  KEY idx_waiting_queue_counter_date (queue_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE IF NOT EXISTS waiting_queue_ticket (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  store_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  queue_date DATE NOT NULL,
+  queue_number INT NOT NULL,
+  reset_version INT NOT NULL DEFAULT 0,
+  party_size INT NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'WAITING',
+  contact_name VARCHAR(64) NOT NULL,
+  contact_phone VARCHAR(32) NOT NULL,
+  called_at DATETIME NULL,
+  seated_at DATETIME NULL,
+  cancelled_at DATETIME NULL,
+  expired_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted TINYINT NOT NULL DEFAULT 0,
+  version INT NOT NULL DEFAULT 0,
+  UNIQUE KEY uk_waiting_queue_ticket_number (store_id, queue_date, reset_version, queue_number),
+  KEY idx_waiting_queue_ticket_user_status (user_id, status),
+  KEY idx_waiting_queue_ticket_store_status (store_id, queue_date, reset_version, status),
+  KEY idx_waiting_queue_ticket_store_number (store_id, queue_date, reset_version, queue_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;

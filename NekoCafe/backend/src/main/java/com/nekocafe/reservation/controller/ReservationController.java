@@ -1,6 +1,10 @@
 package com.nekocafe.reservation.controller;
 
 import com.nekocafe.common.result.ApiResult;
+import com.nekocafe.queue.service.WaitingQueueService;
+import com.nekocafe.queue.service.WaitingQueueService.ApplyQueueRequest;
+import com.nekocafe.queue.service.WaitingQueueService.QueueStatusResponse;
+import com.nekocafe.queue.service.WaitingQueueService.QueueTicketResponse;
 import com.nekocafe.reservation.service.ReservationService;
 import com.nekocafe.reservation.service.ReservationService.CreateReservationRequest;
 import com.nekocafe.reservation.service.ReservationService.ReservationResponse;
@@ -26,9 +30,11 @@ import java.util.Map;
 public class ReservationController {
 
     private final ReservationService reservationService;
+    private final WaitingQueueService waitingQueueService;
 
-    public ReservationController(ReservationService reservationService) {
+    public ReservationController(ReservationService reservationService, WaitingQueueService waitingQueueService) {
         this.reservationService = reservationService;
+        this.waitingQueueService = waitingQueueService;
     }
 
     @GetMapping("/status")
@@ -62,5 +68,27 @@ public class ReservationController {
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResult<ReservationResponse> cancel(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         return ApiResult.ok(reservationService.cancel(principal.userId(), id));
+    }
+
+    @PostMapping("/queue")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResult<QueueTicketResponse> applyQueue(@AuthenticationPrincipal AuthPrincipal principal, @RequestBody ApplyQueueRequest request) {
+        return ApiResult.ok(waitingQueueService.apply(principal.userId(), request));
+    }
+
+    @GetMapping("/queue/status")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResult<QueueStatusResponse> queueStatus(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @RequestParam Long storeId,
+        @RequestParam(required = false) Integer partySize
+    ) {
+        return ApiResult.ok(waitingQueueService.customerStatus(principal.userId(), storeId, partySize));
+    }
+
+    @PostMapping("/queue/{id}/cancel")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResult<QueueTicketResponse> cancelQueue(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        return ApiResult.ok(waitingQueueService.cancel(principal.userId(), id));
     }
 }
