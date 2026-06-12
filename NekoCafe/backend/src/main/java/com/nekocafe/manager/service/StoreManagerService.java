@@ -6,6 +6,8 @@ import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
+import com.nekocafe.customer.entity.Review;
+import com.nekocafe.customer.mapper.ReviewMapper;
 import com.nekocafe.manager.dto.*;
 import com.nekocafe.manager.entity.*;
 import com.nekocafe.manager.mapper.*;
@@ -99,6 +101,7 @@ public class StoreManagerService {
     private final ManagerActivityStoreMapper activityStoreMapper;
     private final DishMapper dishMapper;
     private final DishPriceHistoryMapper dishPriceHistoryMapper;
+    private final ReviewMapper reviewMapper;
 
     public StoreManagerService(
         ManagerUserStoreRoleMapper userStoreRoleMapper,
@@ -119,7 +122,8 @@ public class StoreManagerService {
         ManagerPromotionActivityMapper promotionActivityMapper,
         ManagerActivityStoreMapper activityStoreMapper,
         DishMapper dishMapper,
-        DishPriceHistoryMapper dishPriceHistoryMapper
+        DishPriceHistoryMapper dishPriceHistoryMapper,
+        ReviewMapper reviewMapper
     ) {
         this.userStoreRoleMapper = userStoreRoleMapper;
         this.storeMapper = storeMapper;
@@ -140,6 +144,7 @@ public class StoreManagerService {
         this.activityStoreMapper = activityStoreMapper;
         this.dishMapper = dishMapper;
         this.dishPriceHistoryMapper = dishPriceHistoryMapper;
+        this.reviewMapper = reviewMapper;
     }
 
     public ManagerStoreInfo store(Long managerUserId) {
@@ -387,8 +392,16 @@ public class StoreManagerService {
             .stream()
             .map(item -> new ManagerOrderItemRow(item.getId(), item.getDishId(), item.getDishName(), item.getUnitPrice(), item.getQuantity(), item.getSubtotal()))
             .toList();
+        Review review = reviewMapper.selectOne(new LambdaQueryWrapper<Review>()
+            .eq(Review::getOrderId, order.getId())
+            .eq(Review::getStoreId, storeId)
+            .eq(Review::getDeleted, 0)
+            .eq(Review::getStatus, "VISIBLE")
+            .orderByDesc(Review::getCreatedAt)
+            .last("LIMIT 1"));
         return new ManagerOrderDetail(row.id(), row.orderNo(), row.customerName(), row.tableNo(), row.reservationNo(),
-            row.totalAmount(), row.status(), row.refundStatus(), order.getRemark(), row.paidAt(), row.completedAt(), row.createdAt(), items);
+            row.totalAmount(), row.status(), row.refundStatus(), order.getRemark(), row.paidAt(), row.completedAt(), row.createdAt(),
+            review == null ? null : review.getRating(), review == null ? null : review.getContent(), review == null ? null : review.getCreatedAt(), items);
     }
 
     public List<ManagerCatStatusRow> cats(Long managerUserId, String status) {

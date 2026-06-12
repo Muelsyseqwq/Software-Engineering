@@ -17,6 +17,9 @@ public record ManagerOrderDetail(
     LocalDateTime paidAt,
     LocalDateTime completedAt,
     LocalDateTime createdAt,
+    Integer reviewRating,
+    String reviewContent,
+    LocalDateTime reviewCreatedAt,
     List<ManagerOrderItemRow> items
 ) {
 }

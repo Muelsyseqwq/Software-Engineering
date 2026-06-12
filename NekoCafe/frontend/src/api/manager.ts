@@ -100,6 +100,9 @@ export interface ManagerOrderItemRow {
 
 export interface ManagerOrderDetail extends ManagerOrderRow {
   remark?: string
+  reviewRating?: number
+  reviewContent?: string
+  reviewCreatedAt?: string
   items: ManagerOrderItemRow[]
 }
 
