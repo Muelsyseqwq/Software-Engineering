@@ -9,6 +9,7 @@ export interface StaffReservationRow {
   partySize: number
   timeSlot: string
   remark: string
+  tableNo: string
   status: string
 }
 
