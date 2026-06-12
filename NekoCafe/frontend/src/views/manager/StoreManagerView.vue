@@ -156,7 +156,15 @@
             <el-table-column prop="paidAt" label="支付时间" min-width="170" />
             <el-table-column prop="completedAt" label="完成时间" min-width="170" />
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
-            <el-table-column label="查看详情" width="110"><template #default="{ row }"><el-button size="small" @click="openOrderDetail(row.id)">查看详情</el-button></template></el-table-column>
+            <el-table-column label="操作" width="260" fixed="right">
+              <template #default="{ row }">
+                <el-button size="small" @click="openOrderDetail(row.id)">查看详情</el-button>
+                <template v-if="canReviewRefund(row)">
+                  <el-button size="small" type="success" :loading="refundDecisionId === row.id" @click="handleRefundDecision(row, 'APPROVED')">同意退款</el-button>
+                  <el-button size="small" type="danger" :loading="refundDecisionId === row.id" @click="handleRefundDecision(row, 'REJECTED')">拒绝退款</el-button>
+                </template>
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-tab-pane>
@@ -361,6 +369,7 @@ import {
   createManagerShift,
   createManagerTable,
   decideManagerActivity,
+  decideManagerRefund,
   dismissManagerStaff,
   fetchManagerActivities,
   fetchManagerCats,
@@ -435,6 +444,7 @@ const savingStore = ref(false)
 const savingStatus = ref(false)
 const savingTable = ref(false)
 const savingHire = ref(false)
+const refundDecisionId = ref<number>()
 const dialogVisible = ref(false)
 const storeDialogVisible = ref(false)
 const leaveDialogVisible = ref(false)
@@ -529,6 +539,9 @@ function orderReviewText(detail: ManagerOrderDetail) {
   const rating = detail.reviewRating ? `${detail.reviewRating} 星` : '未评分'
   return detail.reviewContent ? `${rating}｜${detail.reviewContent}` : rating
 }
+function canReviewRefund(row: ManagerOrderRow) {
+  return row.status === 'PAID' && row.refundStatus === 'APPLIED'
+}
 
 function openStoreDialog() {
   if (!store.value) return
@@ -568,6 +581,37 @@ async function handleSubmit() {
 }
 async function openOrderDetail(id: number) {
   try { orderDetail.value = await fetchManagerOrderDetail(id); orderDrawerVisible.value = true } catch (error) { ElMessage.error(error instanceof Error ? error.message : '订单详情加载失败') }
+}
+async function handleRefundDecision(row: ManagerOrderRow, decision: 'APPROVED' | 'REJECTED') {
+  const actionText = decision === 'APPROVED' ? '同意' : '拒绝'
+  let remark = ''
+  try {
+    const result = await ElMessageBox.prompt(`确认${actionText}订单 ${row.orderNo} 的退款申请吗？`, `${actionText}退款`, {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputPlaceholder: decision === 'REJECTED' ? '请填写拒绝原因，顾客可见' : '审核备注，顾客可见',
+      inputType: 'textarea',
+      inputValidator: (value) => {
+        const text = String(value || '').trim()
+        if (text.length > 500) return '审核备注不能超过 500 个字符'
+        if (decision === 'REJECTED' && !text) return '拒绝退款时请填写原因'
+        return true
+      }
+    })
+    remark = String(result.value || '').trim()
+  } catch {
+    return
+  }
+  refundDecisionId.value = row.id
+  try {
+    await decideManagerRefund(row.id, { decision, remark })
+    ElMessage.success(`已${actionText}退款申请`)
+    await Promise.all([loadOrders(), loadMetrics()])
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '退款处理失败')
+  } finally {
+    refundDecisionId.value = undefined
+  }
 }
 async function handleHireSubmit() {
   const username = hireForm.username.trim()

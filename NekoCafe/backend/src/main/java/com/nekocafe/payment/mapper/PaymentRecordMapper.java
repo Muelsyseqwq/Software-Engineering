@@ -31,7 +31,13 @@ public interface PaymentRecordMapper extends BaseMapper<PaymentRecord> {
                                                              @Param("start") String start,
                                                              @Param("end") String end);
 
-    @Select("SELECT COALESCE(SUM(p.amount), 0) AS revenue, COUNT(DISTINCT p.order_id) AS paid_order_count "
+    @Select("SELECT COALESCE(SUM(p.amount), 0) - COALESCE(( "
+            + "SELECT SUM(r.amount) "
+            + "FROM refund_request r "
+            + "JOIN food_order ro ON r.order_id = ro.id AND ro.deleted = 0 "
+            + "WHERE ro.store_id = #{storeId} AND r.status IN ('APPROVED', 'REFUNDED') "
+            + "AND r.reviewed_at >= #{startAt} AND r.reviewed_at < #{endAt}"
+            + "), 0) AS revenue, COUNT(DISTINCT p.order_id) AS paid_order_count "
             + "FROM payment_record p "
             + "JOIN food_order o ON p.order_id = o.id AND o.deleted = 0 "
             + "WHERE p.status = 'SUCCESS' AND o.store_id = #{storeId} "
