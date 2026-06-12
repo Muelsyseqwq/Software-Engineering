@@ -8,6 +8,7 @@ public record StaffReservationRow(
     Integer partySize,
     String timeSlot,
     String remark,
+    String tableNo,
     String status
 ) {
 }

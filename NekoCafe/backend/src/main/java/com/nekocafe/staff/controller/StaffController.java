@@ -42,8 +42,8 @@ public class StaffController {
     }
 
     @PostMapping("/reservations/{id}/check-in")
-    public ApiResult<Void> checkInReservation(@PathVariable Long id) {
-        staffService.checkInReservation(id);
+    public ApiResult<Void> checkInReservation(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        staffService.checkInReservation(id, principal.userId());
         return ApiResult.ok();
     }
 

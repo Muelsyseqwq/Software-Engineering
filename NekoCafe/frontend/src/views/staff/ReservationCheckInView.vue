@@ -14,6 +14,7 @@
       <el-table-column prop="customerName" label="顾客姓名" />
       <el-table-column prop="customerPhone" label="手机号" min-width="130" />
       <el-table-column prop="partySize" label="人数" width="80" />
+      <el-table-column prop="tableNo" label="桌号" width="90" />
       <el-table-column prop="timeSlot" label="预约时段" min-width="130" />
       <el-table-column prop="remark" label="备注" min-width="120" show-overflow-tooltip />
       <el-table-column prop="status" label="状态" width="110">

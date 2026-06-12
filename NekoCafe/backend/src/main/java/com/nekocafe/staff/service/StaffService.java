@@ -119,11 +119,22 @@ public class StaffService {
             slotMap = Collections.emptyMap();
         }
 
+        List<Long> tableIds = list.stream().map(Reservation::getTableId).filter(Objects::nonNull).distinct().toList();
+        final Map<Long, DiningTable> tableMap;
+        if (!tableIds.isEmpty()) {
+            List<DiningTable> tables = diningTableMapper.selectBatchIds(tableIds);
+            tableMap = tables.stream().collect(Collectors.toMap(DiningTable::getId, t -> t));
+        } else {
+            tableMap = Collections.emptyMap();
+        }
+
         return list.stream().map(r -> {
             ReservationSlot slot = slotMap.get(r.getSlotId());
             String timeSlot = slot != null
                 ? slot.getStartTime() + " - " + slot.getEndTime()
                 : "";
+            DiningTable table = tableMap.get(r.getTableId());
+            String tableNo = table != null ? table.getTableNo() : "-";
             return new StaffReservationRow(
                 r.getId(),
                 r.getReservationNo(),
@@ -132,13 +143,14 @@ public class StaffService {
                 r.getPartySize(),
                 timeSlot,
                 r.getRemark(),
+                tableNo,
                 translateReservationStatus(r.getStatus())
             );
         }).toList();
     }
 
     @Transactional
-    public void checkInReservation(Long id) {
+    public void checkInReservation(Long id, Long staffId) {
         Reservation reservation = reservationMapper.selectById(id);
         if (reservation == null || reservation.getDeleted() == 1) {
             throw new BizException(4001, "预约不存在");
@@ -146,6 +158,25 @@ public class StaffService {
         reservation.setStatus("CHECKED_IN");
         reservation.setCheckedInAt(LocalDateTime.now());
         reservationMapper.updateById(reservation);
+
+        Long tableId = reservation.getTableId();
+        if (tableId != null) {
+            DiningTable table = diningTableMapper.selectById(tableId);
+            if (table != null && table.getDeleted() == 0) {
+                String oldStatus = table.getStatus();
+                table.setStatus("OCCUPIED");
+                diningTableMapper.updateById(table);
+
+                DiningTableStatusLog log = new DiningTableStatusLog();
+                log.setTableId(tableId);
+                log.setStoreId(table.getStoreId());
+                log.setOldStatus(oldStatus);
+                log.setNewStatus("OCCUPIED");
+                log.setChangedBy(staffId);
+                log.setReason("预约签到，顾客入座");
+                diningTableStatusLogMapper.insert(log);
+            }
+        }
     }
 
     public List<StaffOrderRow> pendingOrders(Long staffId) {
@@ -207,6 +238,7 @@ public class StaffService {
         LambdaQueryWrapper<FoodOrder> wrapper = new LambdaQueryWrapper<FoodOrder>()
             .eq(FoodOrder::getDeleted, 0)
             .eq(FoodOrder::getHandlerId, staffId)
+            .eq(FoodOrder::getStatus, COMPLETED)
             .orderByDesc(FoodOrder::getUpdatedAt);
 
         List<FoodOrder> orders = foodOrderMapper.selectList(wrapper);
