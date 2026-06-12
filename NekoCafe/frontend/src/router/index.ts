@@ -43,7 +43,7 @@ const router = createRouter({
         { path: 'manager/dishes', name: 'store-manager-dishes', component: () => import('@/views/manager/StoreManagerView.vue'), meta: { requiresAuth: true, roles: ['STORE_MANAGER'], managerTab: 'dishes' } },
         // HQ_OPERATOR / ADMIN pages
         { path: 'dashboard', redirect: '/admin' },
-        { path: 'admin', name: 'admin-overview', component: () => import('@/views/admin/AdminHomeView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
+        { path: 'admin', name: 'admin-overview', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
         { path: 'admin/activities', name: 'admin-activities', component: () => import('@/views/admin/ActivityManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
         { path: 'admin/store-managers', name: 'admin-store-managers', component: () => import('@/views/admin/StoreManagerManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
         { path: 'admin/users', name: 'admin-users', component: () => import('@/views/admin/UserRoleView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },

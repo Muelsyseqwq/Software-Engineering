@@ -89,8 +89,8 @@
             <div class="row-actions">
               <el-button size="small" @click="openDetailDialog(row)">查看</el-button>
               <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
-              <el-button size="small" :type="normalizeCatStatus(row.status) === 'INACTIVE' ? 'success' : 'warning'" @click="handleToggleStatus(row)">
-                {{ normalizeCatStatus(row.status) === 'INACTIVE' ? '启用' : '停用' }}
+              <el-button size="small" :type="normalizeCatStatus(row.status) === 'RESTING' ? 'success' : 'warning'" @click="handleToggleStatus(row)">
+                {{ normalizeCatStatus(row.status) === 'RESTING' ? '启用' : '停用' }}
               </el-button>
               <el-button type="danger" size="small" @click="handleDelete(row.id)">删除</el-button>
             </div>
@@ -216,15 +216,15 @@ import {
 } from '@/api/cat'
 
 const healthStatusOptions: Array<{ label: string; value: CatHealthStatus }> = [
-  { label: '健康', value: 'HEALTHY' },
-  { label: '观察中', value: 'OBSERVING' },
-  { label: '治疗中', value: 'TREATMENT' },
-  { label: '恢复中', value: 'RECOVERING' },
+  { label: '健康', value: '健康' },
+  { label: '观察中', value: '观察中' },
+  { label: '治疗中', value: '治疗中' },
+  { label: '恢复中', value: '恢复中' },
 ]
 
 const statusOptions: Array<{ label: string; value: CatStatus }> = [
-  { label: '正常', value: 'ACTIVE' },
-  { label: '已停用', value: 'INACTIVE' },
+  { label: '正常', value: 'AVAILABLE' },
+  { label: '已停用', value: 'RESTING' },
   { label: '已领养', value: 'ADOPTED' },
 ]
 
@@ -244,8 +244,8 @@ const editingId = ref<number>()
 const currentCat = ref<CatProfile>()
 const form = reactive<CatProfile>(createEmptyForm())
 
-const healthyCount = computed(() => cats.value.filter((cat) => normalizeHealthStatus(cat.healthStatus) === 'HEALTHY').length)
-const activeCount = computed(() => cats.value.filter((cat) => normalizeCatStatus(cat.status) === 'ACTIVE').length)
+const healthyCount = computed(() => cats.value.filter((cat) => normalizeHealthStatus(cat.healthStatus) === '健康').length)
+const activeCount = computed(() => cats.value.filter((cat) => normalizeCatStatus(cat.status) === 'AVAILABLE').length)
 
 function createEmptyForm(): CatProfile {
   return {
@@ -256,11 +256,11 @@ function createEmptyForm(): CatProfile {
     gender: 'UNKNOWN',
     personality: '',
     interact: '',
-    healthStatus: 'HEALTHY',
+    healthStatus: '健康',
     vaccinium: '',
     photoUrl: '',
     description: '',
-    status: 'ACTIVE',
+    status: 'AVAILABLE',
   }
 }
 
@@ -380,8 +380,8 @@ async function handleHealthChange(row: CatProfile, value: string) {
 
 async function handleToggleStatus(row: CatProfile) {
   if (!row.id) return
-  const nextStatus = normalizeCatStatus(row.status) === 'INACTIVE' ? 'ACTIVE' : 'INACTIVE'
-  const actionText = nextStatus === 'ACTIVE' ? '启用' : '停用'
+  const nextStatus = normalizeCatStatus(row.status) === 'RESTING' ? 'AVAILABLE' : 'RESTING'
+  const actionText = nextStatus === 'AVAILABLE' ? '启用' : '停用'
   try {
     await ElMessageBox.confirm(`确认${actionText}“${row.name}”的猫咪档案吗？`, `${actionText}档案`, { type: 'warning' })
     await updateCatStatus(row.id, nextStatus)
@@ -405,19 +405,18 @@ async function handleDelete(id?: number) {
 }
 
 function normalizeHealthStatus(value?: string): CatHealthStatus {
-  if (value === '健康') return 'HEALTHY'
-  if (value === '观察中') return 'OBSERVING'
-  if (value === '治疗中') return 'TREATMENT'
-  if (value === '恢复中') return 'RECOVERING'
-  if (value === 'OBSERVING' || value === 'TREATMENT' || value === 'RECOVERING') return value
-  return 'HEALTHY'
+  if (value === 'OBSERVING') return '观察中'
+  if (value === 'TREATMENT') return '治疗中'
+  if (value === 'RECOVERING') return '恢复中'
+  if (value === '健康' || value === '观察中' || value === '治疗中' || value === '恢复中') return value
+  return '健康'
 }
 
 function normalizeCatStatus(value?: string): CatStatus {
-  if (value === 'AVAILABLE') return 'ACTIVE'
-  if (value === 'RESTING' || value === 'OFFLINE') return 'INACTIVE'
-  if (value === 'INACTIVE' || value === 'ADOPTED') return value
-  return 'ACTIVE'
+  if (value === 'ACTIVE') return 'AVAILABLE'
+  if (value === 'INACTIVE' || value === 'OFFLINE' || value === 'DISABLED') return 'RESTING'
+  if (value === 'RESTING' || value === 'ADOPTED') return value
+  return 'AVAILABLE'
 }
 
 function healthStatusLabel(value?: string) {
@@ -438,17 +437,17 @@ function weightLabel(value?: number) {
 
 function healthTagType(value?: string) {
   const normalized = normalizeHealthStatus(value)
-  if (normalized === 'HEALTHY') return 'success'
-  if (normalized === 'OBSERVING') return 'warning'
-  if (normalized === 'TREATMENT') return 'danger'
-  if (normalized === 'RECOVERING') return 'info'
+  if (normalized === '健康') return 'success'
+  if (normalized === '观察中') return 'warning'
+  if (normalized === '治疗中') return 'danger'
+  if (normalized === '恢复中') return 'info'
   return 'info'
 }
 
 function statusTagType(value?: string) {
   const normalized = normalizeCatStatus(value)
-  if (normalized === 'ACTIVE') return 'success'
-  if (normalized === 'INACTIVE') return 'warning'
+  if (normalized === 'AVAILABLE') return 'success'
+  if (normalized === 'RESTING') return 'warning'
   if (normalized === 'ADOPTED') return 'info'
   return 'info'
 }

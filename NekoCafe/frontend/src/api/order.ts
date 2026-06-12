@@ -30,6 +30,8 @@ export interface OrderResponse {
   orderNo: string
   storeId: number
   storeName: string
+  tableId?: number
+  tableNo?: string
   reservationId?: number
   totalAmount: number
   status: OrderStatus | string

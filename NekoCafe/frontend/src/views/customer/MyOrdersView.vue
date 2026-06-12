@@ -10,7 +10,7 @@
       <div v-else class="orders-stack">
         <article v-for="order in orders" :key="order.id" class="order-card">
           <div class="order-top">
-            <div><p class="eyebrow">{{ order.orderNo }}</p><h2>{{ order.storeName }}</h2><span>{{ formatTime(order.createdAt) }} · ¥{{ Number(order.totalAmount).toFixed(2) }}</span></div>
+            <div><p class="eyebrow">{{ order.orderNo }}</p><h2>{{ order.storeName }}</h2><span>{{ formatTime(order.createdAt) }}{{ order.tableNo ? ` · 桌号 ${order.tableNo}` : '' }} · ¥{{ Number(order.totalAmount).toFixed(2) }}</span></div>
             <div class="status-tags"><el-tag :type="statusTag(order.status)">{{ statusText(order.status) }}</el-tag><el-tag v-if="order.refundStatus && order.refundStatus !== 'NONE'" type="danger" effect="plain">{{ refundText(order.refundStatus) }}</el-tag></div>
           </div>
           <div class="items-line">{{ order.items.map((item) => `${item.dishName}×${item.quantity}`).join(' / ') }}</div>

@@ -47,7 +47,7 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   { path: '/manager/activities', label: '活动确认', icon: '🎯', hint: '处理运营活动', roles: ['STORE_MANAGER'] },
   { path: '/manager/dishes', label: '菜品价格', icon: '🍰', hint: '菜品价格维护', roles: ['STORE_MANAGER'] },
   // HQ_OPERATOR / ADMIN — separate pages in sidebar
-  { path: '/admin', label: '运营总览', icon: '📊', hint: '各门店营收与平台概览', roles: ['HQ_OPERATOR', 'ADMIN'] },
+  { path: '/admin', label: '运营罗盘', icon: '📊', hint: '门店营收、坪效、翻台率与复购率', roles: ['HQ_OPERATOR', 'ADMIN'] },
   { path: '/admin/activities', label: '活动管理', icon: '🎉', hint: '创建活动并发布给门店', roles: ['HQ_OPERATOR', 'ADMIN'] },
   { path: '/admin/store-managers', label: '店长分配', icon: '👤', hint: '管理各门店的店长', roles: ['HQ_OPERATOR', 'ADMIN'] },
   { path: '/admin/users', label: '用户与角色', icon: '⚙️', hint: '用户、角色与门店管理', roles: ['HQ_OPERATOR', 'ADMIN'] },

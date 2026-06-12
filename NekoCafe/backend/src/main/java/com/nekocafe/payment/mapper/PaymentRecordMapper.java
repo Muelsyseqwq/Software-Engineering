@@ -39,4 +39,21 @@ public interface PaymentRecordMapper extends BaseMapper<PaymentRecord> {
     Map<String, Object> selectStoreRevenueSummary(@Param("storeId") Long storeId,
                                                   @Param("startAt") LocalDateTime startAt,
                                                   @Param("endAt") LocalDateTime endAt);
+
+    /**
+     * Revenue trend for all stores (storeId=null) or a specific store.
+     */
+    @Select("<script>"
+            + "SELECT DATE(p.paid_at) AS stat_date, COALESCE(SUM(p.amount), 0) AS total "
+            + "FROM payment_record p "
+            + "JOIN food_order o ON p.order_id = o.id AND o.deleted = 0 "
+            + "WHERE p.status = 'SUCCESS' "
+            + "<if test='storeId != null'>AND o.store_id = #{storeId} </if>"
+            + "AND DATE(p.paid_at) BETWEEN #{start} AND #{end} "
+            + "GROUP BY DATE(p.paid_at) "
+            + "ORDER BY stat_date"
+            + "</script>")
+    List<Map<String, Object>> selectStoreRevenueByDateRangeAll(@Param("storeId") Long storeId,
+                                                                @Param("start") String start,
+                                                                @Param("end") String end);
 }

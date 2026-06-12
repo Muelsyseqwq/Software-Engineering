@@ -4,9 +4,12 @@ import com.nekocafe.admin.service.AdminService;
 import com.nekocafe.admin.service.AdminService.AdminRoleRow;
 import com.nekocafe.admin.service.AdminService.AdminStoreRow;
 import com.nekocafe.admin.service.AdminService.AdminUserRow;
+import com.nekocafe.admin.service.AdminService.CreateStoreManagerRequest;
 import com.nekocafe.admin.service.AdminService.StoreManagerRow;
 import com.nekocafe.common.result.ApiResult;
+import com.nekocafe.security.AuthPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -51,22 +54,35 @@ public class AdminController {
     }
 
     @PostMapping("/store-managers")
-    public ApiResult<Void> assignStoreManager(@RequestBody Map<String, Object> body) {
+    public ApiResult<Void> assignStoreManager(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestBody Map<String, Object> body) {
         Long userId = Long.valueOf(body.get("userId").toString());
         Long storeId = Long.valueOf(body.get("storeId").toString());
-        Long createdBy = body.containsKey("createdBy") && body.get("createdBy") != null
-                ? Long.valueOf(body.get("createdBy").toString()) : null;
+        Long createdBy = principal != null ? principal.userId() : null;
         adminService.assignStoreManager(userId, storeId, createdBy);
         return ApiResult.ok(null);
     }
 
     @DeleteMapping("/store-managers")
-    public ApiResult<Void> removeStoreManager(@RequestBody Map<String, Object> body) {
+    public ApiResult<Void> removeStoreManager(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestBody Map<String, Object> body) {
         Long userId = Long.valueOf(body.get("userId").toString());
         Long storeId = Long.valueOf(body.get("storeId").toString());
-        Long dismissedBy = body.containsKey("dismissedBy") && body.get("dismissedBy") != null
-                ? Long.valueOf(body.get("dismissedBy").toString()) : null;
+        Long dismissedBy = principal != null ? principal.userId() : null;
         adminService.removeStoreManager(userId, storeId, dismissedBy);
         return ApiResult.ok(null);
+    }
+
+    /**
+     * Create a new user and assign as store manager in a single request.
+     */
+    @PostMapping("/store-managers/with-user")
+    public ApiResult<AdminUserRow> createUserAndAssignStoreManager(
+            @AuthenticationPrincipal AuthPrincipal principal,
+            @RequestBody CreateStoreManagerRequest request) {
+        Long createdBy = principal != null ? principal.userId() : null;
+        return ApiResult.ok(adminService.createUserAndAssignStoreManager(request, createdBy));
     }
 }

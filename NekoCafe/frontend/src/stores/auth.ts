@@ -23,6 +23,7 @@ export const useAuthStore = defineStore('auth', {
     user: readJson<AuthUser | null>(USER_KEY, null),
     roles: readJson<RoleCode[]>(ROLES_KEY, []),
     expiresAt: localStorage.getItem(EXPIRES_AT_KEY) || '',
+    profileSynced: false,
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
@@ -37,6 +38,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = auth.user
       this.roles = auth.user.roles
       this.expiresAt = auth.expiresAt
+      this.profileSynced = true
       localStorage.setItem(TOKEN_KEY, auth.token)
       localStorage.setItem(USER_KEY, JSON.stringify(auth.user))
       localStorage.setItem(ROLES_KEY, JSON.stringify(auth.user.roles))
@@ -47,6 +49,7 @@ export const useAuthStore = defineStore('auth', {
       const user = await getMeApi()
       this.user = user
       this.roles = user.roles
+      this.profileSynced = true
       localStorage.setItem(USER_KEY, JSON.stringify(user))
       localStorage.setItem(ROLES_KEY, JSON.stringify(user.roles))
       return user
@@ -56,6 +59,7 @@ export const useAuthStore = defineStore('auth', {
       this.user = null
       this.roles = []
       this.expiresAt = ''
+      this.profileSynced = false
       localStorage.removeItem(TOKEN_KEY)
       localStorage.removeItem(USER_KEY)
       localStorage.removeItem(ROLES_KEY)

@@ -12,7 +12,9 @@ import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
 import com.nekocafe.reservation.entity.Reservation;
 import com.nekocafe.reservation.mapper.ReservationMapper;
+import com.nekocafe.store.entity.DiningTable;
 import com.nekocafe.store.entity.Store;
+import com.nekocafe.store.mapper.DiningTableMapper;
 import com.nekocafe.store.mapper.StoreMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,6 +40,7 @@ public class OrderService {
     private final FoodOrderItemMapper orderItemMapper;
     private final DishMapper dishMapper;
     private final StoreMapper storeMapper;
+    private final DiningTableMapper diningTableMapper;
     private final ReservationMapper reservationMapper;
     private final ReviewMapper reviewMapper;
 
@@ -46,6 +49,7 @@ public class OrderService {
         FoodOrderItemMapper orderItemMapper,
         DishMapper dishMapper,
         StoreMapper storeMapper,
+        DiningTableMapper diningTableMapper,
         ReservationMapper reservationMapper,
         ReviewMapper reviewMapper
     ) {
@@ -53,6 +57,7 @@ public class OrderService {
         this.orderItemMapper = orderItemMapper;
         this.dishMapper = dishMapper;
         this.storeMapper = storeMapper;
+        this.diningTableMapper = diningTableMapper;
         this.reservationMapper = reservationMapper;
         this.reviewMapper = reviewMapper;
     }
@@ -70,8 +75,9 @@ public class OrderService {
         if (store == null) {
             throw new BizException(3002, "门店不存在");
         }
+        Reservation reservation = null;
         if (request.reservationId() != null) {
-            Reservation reservation = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
+            reservation = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
                 .eq(Reservation::getId, request.reservationId())
                 .eq(Reservation::getUserId, userId)
                 .eq(Reservation::getStoreId, request.storeId())
@@ -103,6 +109,7 @@ public class OrderService {
         order.setUserId(userId);
         order.setStoreId(request.storeId());
         order.setReservationId(request.reservationId());
+        order.setTableId(reservation == null ? null : reservation.getTableId());
         order.setTotalAmount(total);
         order.setStatus(CREATED);
         order.setRefundStatus(NONE);
@@ -175,11 +182,14 @@ public class OrderService {
     private OrderResponse toResponse(FoodOrder order, Store store, List<OrderItemResponse> items) {
         boolean reviewed = hasReview(order.getUserId(), order.getId());
         String refundStatus = normalizeRefundStatus(order.getRefundStatus());
+        DiningTable table = order.getTableId() == null ? null : diningTableMapper.selectById(order.getTableId());
         return new OrderResponse(
             order.getId(),
             order.getOrderNo(),
             order.getStoreId(),
             store == null ? "未知门店" : store.getName(),
+            order.getTableId(),
+            table == null ? null : table.getTableNo(),
             order.getReservationId(),
             order.getTotalAmount(),
             order.getStatus(),
@@ -249,6 +259,8 @@ public class OrderService {
         String orderNo,
         Long storeId,
         String storeName,
+        Long tableId,
+        String tableNo,
         Long reservationId,
         BigDecimal totalAmount,
         String status,
