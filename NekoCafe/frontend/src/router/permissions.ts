@@ -39,7 +39,13 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   // Cat caretaker
   { path: '/cats', label: '猫咪档案', icon: '🐈', hint: '健康与互动记录', roles: ['CAT_CARETAKER'] },
   // Store manager
-  { path: '/manager', label: '店长后台', icon: '🏠', hint: '门店与桌位运营', roles: ['STORE_MANAGER'] },
+  { path: '/manager', label: '店长总览', icon: '🏠', hint: '门店经营指标', roles: ['STORE_MANAGER'] },
+  { path: '/manager/tables', label: '桌位预约', icon: '🪑', hint: '桌位与本店预约', roles: ['STORE_MANAGER'] },
+  { path: '/manager/orders', label: '订单营收', icon: '🧾', hint: '订单明细与营收', roles: ['STORE_MANAGER'] },
+  { path: '/manager/cats', label: '猫咪状态', icon: '🐈', hint: '本店猫咪状态', roles: ['STORE_MANAGER'] },
+  { path: '/manager/staff', label: '员工排班', icon: '👥', hint: '雇佣、放假与排班', roles: ['STORE_MANAGER'] },
+  { path: '/manager/activities', label: '活动确认', icon: '🎯', hint: '处理运营活动', roles: ['STORE_MANAGER'] },
+  { path: '/manager/dishes', label: '菜品价格', icon: '🍰', hint: '菜品价格维护', roles: ['STORE_MANAGER'] },
   // HQ_OPERATOR / ADMIN — separate pages in sidebar
   { path: '/admin', label: '运营罗盘', icon: '📊', hint: '门店营收、坪效、翻台率与复购率', roles: ['HQ_OPERATOR', 'ADMIN'] },
   { path: '/admin/activities', label: '活动管理', icon: '🎉', hint: '创建活动并发布给门店', roles: ['HQ_OPERATOR', 'ADMIN'] },

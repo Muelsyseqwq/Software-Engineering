@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +30,15 @@ public interface PaymentRecordMapper extends BaseMapper<PaymentRecord> {
     List<Map<String, Object>> selectStoreRevenueByDateRange(@Param("storeId") Long storeId,
                                                              @Param("start") String start,
                                                              @Param("end") String end);
+
+    @Select("SELECT COALESCE(SUM(p.amount), 0) AS revenue, COUNT(DISTINCT p.order_id) AS paid_order_count "
+            + "FROM payment_record p "
+            + "JOIN food_order o ON p.order_id = o.id AND o.deleted = 0 "
+            + "WHERE p.status = 'SUCCESS' AND o.store_id = #{storeId} "
+            + "AND p.paid_at >= #{startAt} AND p.paid_at < #{endAt}")
+    Map<String, Object> selectStoreRevenueSummary(@Param("storeId") Long storeId,
+                                                  @Param("startAt") LocalDateTime startAt,
+                                                  @Param("endAt") LocalDateTime endAt);
 
     /**
      * Revenue trend for all stores (storeId=null) or a specific store.

@@ -159,6 +159,9 @@
             <el-table-column prop="itemSummary" label="菜品" min-width="180" show-overflow-tooltip />
             <el-table-column label="金额" width="110"><template #default="{ row }">¥{{ money(row.totalAmount) }}</template></el-table-column>
             <el-table-column label="状态" width="110"><template #default="{ row }"><el-tag :type="orderStatusTag(row.status)">{{ orderStatusLabel(row.status) }}</el-tag></template></el-table-column>
+            <el-table-column label="退款" width="110"><template #default="{ row }">{{ refundStatusLabel(row.refundStatus) }}</template></el-table-column>
+            <el-table-column prop="paidAt" label="支付时间" min-width="170" />
+            <el-table-column prop="completedAt" label="完成时间" min-width="170" />
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
             <el-table-column label="操作" width="100"><template #default="{ row }"><el-button size="small" @click="openOrderDetail(row.id)">详情</el-button></template></el-table-column>
           </el-table>
@@ -194,21 +197,39 @@
           <template #header>
             <div class="card-header">
               <span>本店员工</span>
-              <el-button size="small" type="primary" @click="openShiftDialog()">新增排班</el-button>
+              <div class="header-actions">
+                <el-button size="small" type="primary" @click="openHireDialog">新增员工</el-button>
+                <el-button size="small" type="primary" @click="openShiftDialog()">新增排班</el-button>
+              </div>
             </div>
           </template>
           <el-table :data="staffRows" border empty-text="暂无员工数据">
             <el-table-column prop="nickname" label="姓名" width="120" />
             <el-table-column prop="username" label="账号" width="130" />
-            <el-table-column prop="roleCode" label="岗位" width="130" />
+            <el-table-column label="岗位" width="130"><template #default="{ row }">{{ staffRoleLabel(row.roleCode) }}</template></el-table-column>
             <el-table-column label="状态" width="110"><template #default="{ row }"><el-tag :type="staffStatusTag(row.status)">{{ staffStatusLabel(row.status) }}</el-tag></template></el-table-column>
             <el-table-column label="今日排班" min-width="180"><template #default="{ row }">{{ formatShift(row.todayShiftStartTime, row.todayShiftEndTime) }} {{ row.todayShiftStatus ? `(${shiftStatusLabel(row.todayShiftStatus)})` : '' }}</template></el-table-column>
-            <el-table-column prop="activeLeaveStatus" label="请假" width="100" />
-            <el-table-column label="操作" width="230" fixed="right">
+            <el-table-column label="请假" min-width="220">
               <template #default="{ row }">
-                <el-button size="small" @click="openLeaveDialog(row)">放假</el-button>
-                <el-button size="small" @click="openShiftDialog(row)">排班</el-button>
-                <el-button size="small" type="danger" @click="handleDismissStaff(row)">开除</el-button>
+                <span v-if="!row.activeLeaveStatus">无</span>
+                <el-tooltip v-else :content="row.activeLeaveReason || '无原因说明'" placement="top">
+                  <div class="leave-info">
+                    <el-tag size="small" :type="leaveStatusTag(row.activeLeaveStatus)">{{ leaveStatusLabel(row.activeLeaveStatus) }}</el-tag>
+                    <span>{{ leaveTypeLabel(row.activeLeaveType) }}</span>
+                    <span>{{ formatLeaveRange(row) }}</span>
+                  </div>
+                </el-tooltip>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="250" fixed="right">
+              <template #default="{ row }">
+                <template v-if="row.status === 'ACTIVE'">
+                  <el-button size="small" @click="openLeaveDialog(row)">放假</el-button>
+                  <el-button size="small" @click="openShiftDialog(row)">排班</el-button>
+                  <el-button size="small" type="danger" @click="handleDismissStaff(row)">开除</el-button>
+                </template>
+                <el-button v-else-if="row.status === 'DISMISSED'" size="small" type="danger" disabled>已开除</el-button>
+                <el-tag v-else type="warning">{{ staffStatusLabel(row.status) }}</el-tag>
               </template>
             </el-table-column>
           </el-table>
@@ -282,10 +303,22 @@
       <template #footer><el-button @click="dialogVisible = false">取消</el-button><el-button type="primary" :loading="savingTable" @click="handleSubmit">保存</el-button></template>
     </el-dialog>
 
+    <el-dialog v-model="hireDialogVisible" title="新增员工" width="520px" :lock-scroll="false">
+      <el-form :model="hireForm" label-position="top">
+        <el-form-item label="账号"><el-input v-model="hireForm.username" placeholder="3-32 位字母、数字或下划线" /></el-form-item>
+        <el-form-item label="初始密码"><el-input v-model="hireForm.password" type="password" show-password placeholder="6-72 位" /></el-form-item>
+        <el-form-item label="姓名"><el-input v-model="hireForm.nickname" /></el-form-item>
+        <el-form-item label="岗位"><el-select v-model="hireForm.roleCode" style="width: 100%"><el-option label="店员" value="STAFF" /><el-option label="猫咪管家" value="CAT_CARETAKER" /></el-select></el-form-item>
+        <el-form-item label="手机号"><el-input v-model="hireForm.phone" placeholder="可选" /></el-form-item>
+        <el-form-item label="邮箱"><el-input v-model="hireForm.email" placeholder="可选" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="hireDialogVisible = false">取消</el-button><el-button type="primary" :loading="savingHire" @click="handleHireSubmit">保存</el-button></template>
+    </el-dialog>
+
     <el-dialog v-model="leaveDialogVisible" title="给员工放假" width="460px" :lock-scroll="false">
       <el-form :model="leaveForm" label-position="top">
         <el-form-item label="请假类型"><el-select v-model="leaveForm.leaveType"><el-option label="事假" value="PERSONAL" /><el-option label="病假" value="SICK" /><el-option label="年假" value="ANNUAL" /></el-select></el-form-item>
-        <el-form-item label="日期"><el-date-picker v-model="leaveDates" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" style="width: 100%" /></el-form-item>
+        <el-form-item label="日期"><el-date-picker v-model="leaveDates" type="daterange" value-format="YYYY-MM-DD" unlink-panels start-placeholder="开始" end-placeholder="结束" style="width: 100%" /></el-form-item>
         <el-form-item label="原因"><el-input v-model="leaveForm.reason" type="textarea" :rows="3" /></el-form-item>
       </el-form>
       <template #footer><el-button @click="leaveDialogVisible = false">取消</el-button><el-button type="primary" @click="handleGrantLeave">确认</el-button></template>
@@ -327,8 +360,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 import {
   createManagerShift,
   createManagerTable,
@@ -347,6 +381,7 @@ import {
   fetchManagerStore,
   fetchManagerTables,
   grantManagerStaffLeave,
+  hireManagerStaff,
   updateManagerDishPrice,
   updateManagerReservationStatus,
   updateManagerShift,
@@ -355,6 +390,7 @@ import {
   updateManagerTable,
   type DishPriceHistoryRow,
   type GrantLeavePayload,
+  type HireStaffPayload,
   type ManagerActivityRow,
   type ManagerCatStatusRow,
   type ManagerDishRow,
@@ -373,8 +409,21 @@ import {
 } from '@/api/manager'
 
 type TagType = 'success' | 'info' | 'warning' | 'danger' | 'primary'
+type ManagerTab = 'overview' | 'tables' | 'orders' | 'cats' | 'staff' | 'activities' | 'dishes'
 
-const activeTab = ref('overview')
+const route = useRoute()
+const router = useRouter()
+const tabPathMap: Record<ManagerTab, string> = {
+  overview: '/manager',
+  tables: '/manager/tables',
+  orders: '/manager/orders',
+  cats: '/manager/cats',
+  staff: '/manager/staff',
+  activities: '/manager/activities',
+  dishes: '/manager/dishes'
+}
+
+const activeTab = ref(currentRouteTab())
 const loadedTabs = new Set<string>()
 const store = ref<ManagerStoreInfo>()
 const metrics = ref<ManagerMetricsSummary>()
@@ -392,11 +441,13 @@ const loading = ref(false)
 const savingStore = ref(false)
 const savingStatus = ref(false)
 const savingTable = ref(false)
+const savingHire = ref(false)
 const dialogVisible = ref(false)
 const storeDialogVisible = ref(false)
 const leaveDialogVisible = ref(false)
 const shiftDialogVisible = ref(false)
 const priceDialogVisible = ref(false)
+const hireDialogVisible = ref(false)
 const orderDrawerVisible = ref(false)
 const priceHistoryVisible = ref(false)
 const editingId = ref<number>()
@@ -416,10 +467,11 @@ const catQuery = reactive<{ status?: string }>({ status: '' })
 const activityQuery = reactive<{ status?: string }>({ status: '' })
 const dishQuery = reactive<{ status?: string }>({ status: '' })
 const leaveForm = reactive<GrantLeavePayload>({ leaveType: 'PERSONAL', startDate: '', endDate: '', reason: '' })
+const hireForm = reactive<HireStaffPayload>({ username: '', password: '', nickname: '', phone: '', email: '', roleCode: 'STAFF' })
 const shiftForm = reactive<ManagerShiftPayload>({ userId: 0, roleCode: 'STAFF', shiftDate: today(), startTime: '09:00', endTime: '18:00', status: 'SCHEDULED', remark: '' })
 const priceForm = reactive({ newPrice: 0, reason: '' })
 
-const activeStaffOptions = computed(() => staffRows.value.filter((staff) => staff.status !== 'DISMISSED'))
+const activeStaffOptions = computed(() => staffRows.value.filter((staff) => staff.status === 'ACTIVE'))
 
 async function loadData() {
   loading.value = true
@@ -441,7 +493,9 @@ async function refreshCurrentTab() {
 }
 
 async function handleTabChange(name: string | number) {
-  await loadTab(String(name))
+  const tab = normalizeTab(name)
+  if (route.path !== tabPathMap[tab]) await router.push(tabPathMap[tab])
+  await loadTab(tab)
 }
 
 async function loadTab(name: string) {
@@ -486,6 +540,8 @@ function openStoreDialog() {
 function resetForm() { editingId.value = undefined; Object.assign(form, { tableNo: '', capacity: 2, area: '', status: 'AVAILABLE' }) }
 function openCreateDialog() { resetForm(); dialogVisible.value = true }
 function openEditDialog(row: ManagerTableRow) { editingId.value = row.id; Object.assign(form, row, { status: row.status === 'UNAVAILABLE' ? 'DISABLED' : row.status }); dialogVisible.value = true }
+function resetHireForm() { Object.assign(hireForm, { username: '', password: '', nickname: '', phone: '', email: '', roleCode: 'STAFF' }) }
+function openHireDialog() { resetHireForm(); hireDialogVisible.value = true }
 function openLeaveDialog(row: ManagerStaffRow) { selectedStaff.value = row; Object.assign(leaveForm, { leaveType: 'PERSONAL', startDate: '', endDate: '', reason: '' }); leaveDates.value = []; leaveDialogVisible.value = true }
 function openShiftDialog(staff?: ManagerStaffRow, row?: ManagerShiftRow) {
   editingShiftId.value = row?.id
@@ -516,14 +572,36 @@ async function handleReservationStatus(row: ManagerReservationRow, status: strin
   if (status === 'CANCELLED') { try { await ElMessageBox.confirm('取消预约后会释放对应时段库存，确认取消吗？', '取消预约', { type: 'warning' }) } catch { return } }
   try { await updateManagerReservationStatus(row.id, status); ElMessage.success(`预约已更新为${reservationStatusLabel(status)}`); await loadReservations() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '预约状态更新失败') }
 }
-async function openOrderDetail(id: number) { orderDetail.value = await fetchManagerOrderDetail(id); orderDrawerVisible.value = true }
+async function openOrderDetail(id: number) {
+  try { orderDetail.value = await fetchManagerOrderDetail(id); orderDrawerVisible.value = true } catch (error) { ElMessage.error(error instanceof Error ? error.message : '订单详情加载失败') }
+}
+async function handleHireSubmit() {
+  const username = hireForm.username.trim()
+  const password = hireForm.password
+  const nickname = hireForm.nickname.trim()
+  const phone = hireForm.phone?.trim()
+  const email = hireForm.email?.trim()
+  if (!/^[A-Za-z0-9_]{3,32}$/.test(username)) return ElMessage.warning('账号需为 3-32 位字母、数字或下划线')
+  if (password.length < 6 || password.length > 72) return ElMessage.warning('初始密码长度需为 6-72 位')
+  if (!nickname) return ElMessage.warning('请填写员工姓名')
+  if (phone && !/^1[3-9]\d{9}$/.test(phone)) return ElMessage.warning('手机号格式不正确')
+  if (email && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return ElMessage.warning('邮箱格式不正确')
+  savingHire.value = true
+  try {
+    await hireManagerStaff({ username, password, nickname, phone, email, roleCode: hireForm.roleCode })
+    ElMessage.success('员工已新增')
+    hireDialogVisible.value = false
+    await loadStaff()
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '新增员工失败') } finally { savingHire.value = false }
+}
 async function handleDismissStaff(row: ManagerStaffRow) {
   try { await ElMessageBox.confirm(`确认开除 ${row.nickname || row.username || '该员工'} 吗？`, '开除员工', { type: 'warning' }) } catch { return }
-  try { await dismissManagerStaff(row.userStoreRoleId, '店长操作'); ElMessage.success('员工已标记为离职'); await loadStaff() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '开除失败') }
+  try { await dismissManagerStaff(row.userStoreRoleId, '店长操作'); ElMessage.success('员工已开除，账号已停用'); await loadStaff() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '开除失败') }
 }
 async function handleGrantLeave() {
   if (!selectedStaff.value) return
   if (!leaveDates.value?.[0] || !leaveDates.value?.[1]) return ElMessage.warning('请选择请假日期')
+  if (leaveDates.value[0] > leaveDates.value[1]) return ElMessage.warning('请假开始日期不能晚于结束日期')
   try { await grantManagerStaffLeave(selectedStaff.value.userId, { ...leaveForm, startDate: leaveDates.value[0], endDate: leaveDates.value[1] }); ElMessage.success('请假已记录'); leaveDialogVisible.value = false; await Promise.all([loadStaff(), loadShifts()]) } catch (error) { ElMessage.error(error instanceof Error ? error.message : '放假失败') }
 }
 async function handleShiftSubmit() {
@@ -539,7 +617,14 @@ async function handlePriceSubmit() {
 }
 async function openPriceHistory(row: ManagerDishRow) { priceHistory.value = await fetchManagerDishPriceHistory(row.id); priceHistoryVisible.value = true }
 
-function today() { return new Date().toISOString().slice(0, 10) }
+function currentRouteTab() { return normalizeTab(route.meta.managerTab) }
+function normalizeTab(tab: unknown): ManagerTab { return Object.keys(tabPathMap).includes(String(tab)) ? String(tab) as ManagerTab : 'overview' }
+function today() {
+  const now = new Date()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${now.getFullYear()}-${month}-${day}`
+}
 function formatTime(value?: string) { return value ? value.slice(0, 5) : '--:--' }
 function formatShift(start?: string, end?: string) { return start && end ? `${formatTime(start)}-${formatTime(end)}` : '未排班' }
 function money(value?: number) { return Number(value || 0).toFixed(2) }
@@ -554,10 +639,16 @@ function reservationStatusLabel(status: string) { return label(status, { PENDING
 function reservationStatusTag(status: string) { return tag(status, { PENDING_PAYMENT: 'warning', RESERVED: 'primary', CHECKED_IN: 'success', COMPLETED: 'info', CANCELLED: 'danger' }) }
 function orderStatusLabel(status: string) { return label(status, { CREATED: '已创建', PAID: '已支付', PREPARING: '制作中', COMPLETED: '已完成', CANCELLED: '已取消', REFUNDING: '退款中', REFUNDED: '已退款' }) }
 function orderStatusTag(status: string) { return tag(status, { CREATED: 'info', PAID: 'success', PREPARING: 'warning', COMPLETED: 'primary', CANCELLED: 'danger', REFUNDING: 'warning', REFUNDED: 'info' }) }
+function refundStatusLabel(status?: string) { return status ? label(status, { NONE: '无', APPLIED: '已申请', APPROVED: '已同意', REJECTED: '已拒绝', REFUNDED: '已退款' }) : '无' }
 function catStatusLabel(status: string) { return label(status, { AVAILABLE: '可互动', RESTING: '休息中', DISABLED: '停用' }) }
 function catStatusTag(status: string) { return tag(status, { AVAILABLE: 'success', RESTING: 'warning', DISABLED: 'info' }) }
-function staffStatusLabel(status: string) { return label(status, { ACTIVE: '在职', SUSPENDED: '暂停', DISMISSED: '已离职' }) }
+function staffRoleLabel(roleCode: string) { return label(roleCode, { STAFF: '店员', CAT_CARETAKER: '猫咪管家' }) }
+function staffStatusLabel(status: string) { return label(status, { ACTIVE: '在职', SUSPENDED: '暂停', DISMISSED: '已开除' }) }
 function staffStatusTag(status: string) { return tag(status, { ACTIVE: 'success', SUSPENDED: 'warning', DISMISSED: 'danger' }) }
+function leaveTypeLabel(type?: string) { return type ? label(type, { PERSONAL: '事假', SICK: '病假', ANNUAL: '年假' }) : '' }
+function leaveStatusLabel(status?: string) { return status ? label(status, { PENDING: '待审批', APPROVED: '已批准', REJECTED: '已拒绝', CANCELLED: '已取消' }) : '无' }
+function leaveStatusTag(status?: string) { return tag(status || '', { PENDING: 'warning', APPROVED: 'success', REJECTED: 'danger', CANCELLED: 'info' }) }
+function formatLeaveRange(row: ManagerStaffRow) { return row.activeLeaveStartDate && row.activeLeaveEndDate ? `${row.activeLeaveStartDate} 至 ${row.activeLeaveEndDate}` : '' }
 function shiftStatusLabel(status: string) { return label(status, { SCHEDULED: '已排班', ON_LEAVE: '请假', CANCELLED: '已取消', COMPLETED: '已完成' }) }
 function shiftStatusTag(status: string) { return tag(status, { SCHEDULED: 'primary', ON_LEAVE: 'warning', CANCELLED: 'danger', COMPLETED: 'success' }) }
 function activityStatusLabel(status: string) { return label(status, { PENDING: '待确认', ACCEPTED: '已接受', REJECTED: '已拒绝' }) }
@@ -565,7 +656,15 @@ function activityStatusTag(status: string) { return tag(status, { PENDING: 'warn
 function dishStatusLabel(status: string) { return label(status, { ON_SHELF: '上架', OFF_SHELF: '下架', SOLD_OUT: '售罄' }) }
 function dishStatusTag(status: string) { return tag(status, { ON_SHELF: 'success', OFF_SHELF: 'info', SOLD_OUT: 'warning' }) }
 
-onMounted(loadData)
+watch(
+  () => route.meta.managerTab,
+  async () => {
+    const tab = currentRouteTab()
+    activeTab.value = tab
+    await loadTab(tab)
+  },
+  { immediate: true }
+)
 </script>
 
 <style scoped>
@@ -583,6 +682,7 @@ onMounted(loadData)
 .metric-card strong { font-size: 22px; color: #92400e; }
 .form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .drawer-content { display: grid; gap: 10px; }
+.leave-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
 @media (max-width: 768px) {
   .page-header, .card-header { flex-direction: column; }

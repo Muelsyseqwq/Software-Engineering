@@ -134,6 +134,19 @@ export interface ManagerStaffRow {
   todayShiftEndTime?: string
   todayShiftStatus?: string
   activeLeaveStatus?: string
+  activeLeaveType?: string
+  activeLeaveStartDate?: string
+  activeLeaveEndDate?: string
+  activeLeaveReason?: string
+}
+
+export interface HireStaffPayload {
+  username: string
+  password: string
+  nickname: string
+  phone?: string
+  email?: string
+  roleCode: 'STAFF' | 'CAT_CARETAKER'
 }
 
 export interface GrantLeavePayload {
@@ -283,6 +296,11 @@ export async function fetchManagerCats(params?: { status?: string }) {
 
 export async function fetchManagerStaff(params?: ManagerStaffQuery) {
   const { data } = await http.get<ApiResult<ManagerStaffRow[]>>('/manager/staff', { params })
+  return data.data
+}
+
+export async function hireManagerStaff(payload: HireStaffPayload) {
+  const { data } = await http.post<ApiResult<ManagerStaffRow>>('/manager/staff', payload)
   return data.data
 }
 

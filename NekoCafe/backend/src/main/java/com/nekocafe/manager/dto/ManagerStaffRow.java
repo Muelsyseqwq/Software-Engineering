@@ -16,6 +16,10 @@ public record ManagerStaffRow(
     LocalTime todayShiftStartTime,
     LocalTime todayShiftEndTime,
     String todayShiftStatus,
-    String activeLeaveStatus
+    String activeLeaveStatus,
+    String activeLeaveType,
+    LocalDate activeLeaveStartDate,
+    LocalDate activeLeaveEndDate,
+    String activeLeaveReason
 ) {
 }
