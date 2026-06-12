@@ -136,6 +136,14 @@ public class StoreManagerController {
         return ApiResult.ok(storeManagerService.staff(principal.userId(), status, roleCode));
     }
 
+    @PostMapping("/staff")
+    public ApiResult<ManagerStaffRow> hireStaff(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @RequestBody HireStaffRequest request
+    ) {
+        return ApiResult.ok(storeManagerService.hireStaff(principal.userId(), request));
+    }
+
     @PutMapping("/staff/{userStoreRoleId}/dismiss")
     public ApiResult<Void> dismissStaff(
         @AuthenticationPrincipal AuthPrincipal principal,

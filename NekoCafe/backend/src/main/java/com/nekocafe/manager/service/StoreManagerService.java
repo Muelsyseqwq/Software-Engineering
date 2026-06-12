@@ -2,6 +2,7 @@ package com.nekocafe.manager.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
@@ -14,6 +15,7 @@ import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.entity.FoodOrderItem;
 import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
+import com.nekocafe.payment.mapper.PaymentRecordMapper;
 import com.nekocafe.reservation.entity.Reservation;
 import com.nekocafe.reservation.entity.ReservationSlot;
 import com.nekocafe.reservation.mapper.ReservationMapper;
@@ -22,9 +24,14 @@ import com.nekocafe.store.entity.DiningTable;
 import com.nekocafe.store.entity.Store;
 import com.nekocafe.store.mapper.DiningTableMapper;
 import com.nekocafe.store.mapper.StoreMapper;
+import com.nekocafe.user.entity.Role;
 import com.nekocafe.user.entity.User;
+import com.nekocafe.user.entity.UserRole;
+import com.nekocafe.user.mapper.RoleMapper;
 import com.nekocafe.user.mapper.UserMapper;
+import com.nekocafe.user.mapper.UserRoleMapper;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +58,8 @@ public class StoreManagerService {
     private static final String DISMISSED = "DISMISSED";
     private static final String STORE_MANAGER = "STORE_MANAGER";
     private static final String STAFF = "STAFF";
+    private static final String CAT_CARETAKER = "CAT_CARETAKER";
+    private static final Set<String> HIRE_ROLES = Set.of(STAFF, CAT_CARETAKER);
     private static final String OPEN = "OPEN";
     private static final String CLOSED = "CLOSED";
     private static final String PREPARING = "PREPARING";
@@ -67,7 +76,6 @@ public class StoreManagerService {
     private static final Set<String> STORE_STATUSES = Set.of(OPEN, CLOSED, PREPARING);
     private static final Set<String> TABLE_STATUSES = Set.of(AVAILABLE, "OCCUPIED", RESERVED, "CLEANING", DISABLED, UNAVAILABLE);
     private static final Set<String> RESERVATION_ACTION_STATUSES = Set.of(CHECKED_IN, COMPLETED, CANCELLED);
-    private static final Set<String> REVENUE_ORDER_STATUSES = Set.of("PAID", PREPARING, COMPLETED);
     private static final Set<String> SHIFT_STATUSES = Set.of(SCHEDULED, ON_LEAVE, CANCELLED, COMPLETED);
     private static final Set<String> ACTIVITY_DECISIONS = Set.of("ACCEPTED", "REJECTED");
     private static final DateTimeFormatter SLOT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
@@ -79,7 +87,11 @@ public class StoreManagerService {
     private final ReservationSlotMapper slotMapper;
     private final FoodOrderMapper foodOrderMapper;
     private final FoodOrderItemMapper foodOrderItemMapper;
+    private final PaymentRecordMapper paymentRecordMapper;
     private final UserMapper userMapper;
+    private final RoleMapper roleMapper;
+    private final UserRoleMapper userRoleMapper;
+    private final PasswordEncoder passwordEncoder;
     private final CatMapper catMapper;
     private final StaffShiftMapper staffShiftMapper;
     private final StaffLeaveRequestMapper staffLeaveRequestMapper;
@@ -96,7 +108,11 @@ public class StoreManagerService {
         ReservationSlotMapper slotMapper,
         FoodOrderMapper foodOrderMapper,
         FoodOrderItemMapper foodOrderItemMapper,
+        PaymentRecordMapper paymentRecordMapper,
         UserMapper userMapper,
+        RoleMapper roleMapper,
+        UserRoleMapper userRoleMapper,
+        PasswordEncoder passwordEncoder,
         CatMapper catMapper,
         StaffShiftMapper staffShiftMapper,
         StaffLeaveRequestMapper staffLeaveRequestMapper,
@@ -112,7 +128,11 @@ public class StoreManagerService {
         this.slotMapper = slotMapper;
         this.foodOrderMapper = foodOrderMapper;
         this.foodOrderItemMapper = foodOrderItemMapper;
+        this.paymentRecordMapper = paymentRecordMapper;
         this.userMapper = userMapper;
+        this.roleMapper = roleMapper;
+        this.userRoleMapper = userRoleMapper;
+        this.passwordEncoder = passwordEncoder;
         this.catMapper = catMapper;
         this.staffShiftMapper = staffShiftMapper;
         this.staffLeaveRequestMapper = staffLeaveRequestMapper;
@@ -320,12 +340,9 @@ public class StoreManagerService {
         long tableCount = diningTableMapper.selectCount(new LambdaQueryWrapper<DiningTable>()
             .eq(DiningTable::getStoreId, storeId)
             .eq(DiningTable::getDeleted, 0));
-        BigDecimal revenue = orders.stream()
-            .filter(order -> REVENUE_ORDER_STATUSES.contains(order.getStatus()))
-            .map(FoodOrder::getTotalAmount)
-            .filter(Objects::nonNull)
-            .reduce(BigDecimal.ZERO, BigDecimal::add);
-        long paidOrderCount = orders.stream().filter(order -> REVENUE_ORDER_STATUSES.contains(order.getStatus())).count();
+        Map<String, Object> revenueSummary = paymentRecordMapper.selectStoreRevenueSummary(storeId, startAt, endAt);
+        BigDecimal revenue = readBigDecimal(revenueSummary, "revenue");
+        long paidOrderCount = readLong(revenueSummary, "paid_order_count");
         long completedOrderCount = orders.stream().filter(order -> COMPLETED.equals(order.getStatus())).count();
         long checkedInReservationCount = reservationList.stream()
             .filter(reservation -> Set.of(CHECKED_IN, COMPLETED).contains(reservation.getStatus()))
@@ -419,11 +436,57 @@ public class StoreManagerService {
             User user = userMap.get(role.getUserId());
             StaffShift shift = shiftMap.get(role.getUserId());
             StaffLeaveRequest leave = leaveMap.get(role.getUserId());
-            return new ManagerStaffRow(role.getId(), role.getUserId(), user == null ? null : user.getUsername(),
-                user == null ? null : user.getNickname(), user == null ? null : user.getPhone(), user == null ? null : user.getEmail(),
-                role.getRoleCode(), role.getStatus(), shift == null ? null : shift.getShiftDate(), shift == null ? null : shift.getStartTime(),
-                shift == null ? null : shift.getEndTime(), shift == null ? null : shift.getStatus(), leave == null ? null : leave.getLeaveType());
+            return toStaffRow(role, user, shift, leave);
         }).toList();
+    }
+
+    @Transactional
+    public ManagerStaffRow hireStaff(Long managerUserId, HireStaffRequest request) {
+        Long storeId = resolveManagedStoreId(managerUserId);
+        String username = normalizeRequired(request == null ? null : request.username(), "账号不能为空");
+        String password = normalizeRequired(request == null ? null : request.password(), "初始密码不能为空");
+        String nickname = normalizeRequired(request == null ? null : request.nickname(), "员工姓名不能为空");
+        String phone = normalizeOptional(request == null ? null : request.phone());
+        String email = normalizeOptional(request == null ? null : request.email());
+        String roleCode = normalizeRequired(request == null ? null : request.roleCode(), "请选择岗位").toUpperCase();
+        validateHireRequest(username, password, nickname, phone, email, roleCode);
+        ensureUserUnique(User::getUsername, username, 2246, "用户名已存在");
+        if (phone != null) ensureUserUnique(User::getPhone, phone, 2247, "手机号已存在");
+        if (email != null) ensureUserUnique(User::getEmail, email, 2248, "邮箱已存在");
+
+        Role role = roleMapper.selectOne(new LambdaQueryWrapper<Role>()
+            .eq(Role::getCode, roleCode)
+            .last("LIMIT 1"));
+        if (role == null) {
+            throw new BizException(2249, "员工角色未初始化");
+        }
+
+        User user = new User();
+        user.setUsername(username);
+        user.setPasswordHash(passwordEncoder.encode(password));
+        user.setNickname(nickname);
+        user.setPhone(phone);
+        user.setEmail(email);
+        user.setStatus(ACTIVE);
+        try {
+            userMapper.insert(user);
+
+            UserRole userRole = new UserRole();
+            userRole.setUserId(user.getId());
+            userRole.setRoleId(role.getId());
+            userRoleMapper.insert(userRole);
+
+            UserStoreRole storeRole = new UserStoreRole();
+            storeRole.setUserId(user.getId());
+            storeRole.setStoreId(storeId);
+            storeRole.setRoleCode(roleCode);
+            storeRole.setStatus(ACTIVE);
+            storeRole.setCreatedBy(managerUserId);
+            userStoreRoleMapper.insert(storeRole);
+            return toStaffRow(storeRole, user, null, null);
+        } catch (DuplicateKeyException exception) {
+            throw new BizException(2246, "用户名、手机号或邮箱已存在，或该员工已在当前门店任职");
+        }
     }
 
     @Transactional
@@ -433,11 +496,18 @@ public class StoreManagerService {
         if (STORE_MANAGER.equals(role.getRoleCode())) {
             throw new BizException(2241, "不能通过此接口调整店长身份");
         }
+        if (DISMISSED.equals(role.getStatus())) {
+            throw new BizException(2241, "员工已开除");
+        }
         role.setStatus(DISMISSED);
         role.setDismissedBy(managerUserId);
         role.setDismissedAt(LocalDateTime.now());
         role.setDismissReason(normalizeOptional(request == null ? null : request.reason()));
         userStoreRoleMapper.updateById(role);
+        userMapper.update(null, new LambdaUpdateWrapper<User>()
+            .eq(User::getId, role.getUserId())
+            .eq(User::getDeleted, 0)
+            .set(User::getStatus, DISABLED));
     }
 
     @Transactional
@@ -702,14 +772,23 @@ public class StoreManagerService {
                 .map(item -> item.getDishName() + "×" + item.getQuantity())
                 .collect(Collectors.joining("、")))));
         return orders.stream().map(order -> {
-            User user = userMap.get(order.getUserId());
-            DiningTable table = tableMap.get(order.getTableId());
-            Reservation reservation = reservationMap.get(order.getReservationId());
+            User user = order.getUserId() == null ? null : userMap.get(order.getUserId());
+            DiningTable table = order.getTableId() == null ? null : tableMap.get(order.getTableId());
+            Reservation reservation = order.getReservationId() == null ? null : reservationMap.get(order.getReservationId());
             return new ManagerOrderRow(order.getId(), order.getOrderNo(), user == null ? "散客" : user.getNickname(),
                 table == null ? null : table.getTableNo(), reservation == null ? null : reservation.getReservationNo(),
                 order.getTotalAmount(), order.getStatus(), order.getRefundStatus(), order.getPaidAt(), order.getCompletedAt(),
                 order.getCreatedAt(), summaryMap.getOrDefault(order.getId(), ""));
         }).toList();
+    }
+
+    private ManagerStaffRow toStaffRow(UserStoreRole role, User user, StaffShift shift, StaffLeaveRequest leave) {
+        return new ManagerStaffRow(role.getId(), role.getUserId(), user == null ? null : user.getUsername(),
+            user == null ? null : user.getNickname(), user == null ? null : user.getPhone(), user == null ? null : user.getEmail(),
+            role.getRoleCode(), role.getStatus(), shift == null ? null : shift.getShiftDate(), shift == null ? null : shift.getStartTime(),
+            shift == null ? null : shift.getEndTime(), shift == null ? null : shift.getStatus(), leave == null ? null : leave.getStatus(),
+            leave == null ? null : leave.getLeaveType(), leave == null ? null : leave.getStartDate(), leave == null ? null : leave.getEndDate(),
+            leave == null ? null : leave.getReason());
     }
 
     private List<ManagerShiftRow> toShiftRows(List<StaffShift> shifts) {
@@ -764,7 +843,7 @@ public class StoreManagerService {
             .eq(UserStoreRole::getStoreId, storeId)
             .eq(UserStoreRole::getUserId, userId)
             .ne(UserStoreRole::getRoleCode, STORE_MANAGER)
-            .ne(UserStoreRole::getStatus, DISMISSED)
+            .eq(UserStoreRole::getStatus, ACTIVE)
             .last("LIMIT 1"));
         if (role == null) throw new BizException(2240, "员工不存在、已离职或不属于当前门店");
         return role;
@@ -790,6 +869,50 @@ public class StoreManagerService {
         String status = normalizeRequired(payload.status(), "桌位状态不能为空").toUpperCase();
         if (!TABLE_STATUSES.contains(status)) throw new BizException(2216, "不支持的桌位状态");
         return UNAVAILABLE.equals(status) ? DISABLED : status;
+    }
+
+    private void validateHireRequest(String username, String password, String nickname, String phone, String email, String roleCode) {
+        if (!username.matches("^[A-Za-z0-9_]{3,32}$")) {
+            throw new BizException(2246, "账号需为 3-32 位字母、数字或下划线");
+        }
+        if (password.length() < 6 || password.length() > 72) {
+            throw new BizException(2247, "初始密码长度需为 6-72 位");
+        }
+        validateLength(nickname, 64, "员工姓名不能超过 64 个字符");
+        if (phone != null && !phone.matches("^1[3-9]\\d{9}$")) {
+            throw new BizException(2248, "手机号格式不正确");
+        }
+        validateOptionalLength(email, 128, "邮箱不能超过 128 个字符");
+        if (email != null && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) {
+            throw new BizException(2248, "邮箱格式不正确");
+        }
+        if (!HIRE_ROLES.contains(roleCode)) {
+            throw new BizException(2248, "只能雇佣店员或猫咪管家");
+        }
+    }
+
+    private void ensureUserUnique(SFunction<User, ?> column, String value, int code, String message) {
+        long count = userMapper.selectCount(new LambdaQueryWrapper<User>()
+            .eq(User::getDeleted, 0)
+            .eq(column, value));
+        if (count > 0) throw new BizException(code, message);
+    }
+
+    private BigDecimal readBigDecimal(Map<String, Object> row, String key) {
+        if (row == null) return BigDecimal.ZERO;
+        Object value = row.get(key);
+        if (value == null) value = row.get(key.toUpperCase());
+        if (value instanceof BigDecimal bd) return bd;
+        if (value instanceof Number number) return BigDecimal.valueOf(number.doubleValue());
+        return BigDecimal.ZERO;
+    }
+
+    private long readLong(Map<String, Object> row, String key) {
+        if (row == null) return 0L;
+        Object value = row.get(key);
+        if (value == null) value = row.get(key.toUpperCase());
+        if (value instanceof Number number) return number.longValue();
+        return 0L;
     }
 
     private void validateLeaveRequest(GrantLeaveRequest request) {
