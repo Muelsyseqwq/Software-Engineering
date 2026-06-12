@@ -89,8 +89,8 @@
             <div class="row-actions">
               <el-button size="small" @click="openDetailDialog(row)">查看</el-button>
               <el-button size="small" @click="openEditDialog(row)">编辑</el-button>
-              <el-button size="small" :type="normalizeCatStatus(row.status) === 'RESTING' ? 'success' : 'warning'" @click="handleToggleStatus(row)">
-                {{ normalizeCatStatus(row.status) === 'RESTING' ? '启用' : '停用' }}
+              <el-button size="small" :type="normalizeCatStatus(row.status) === 'DISABLED' ? 'success' : 'warning'" @click="handleToggleStatus(row)">
+                {{ normalizeCatStatus(row.status) === 'DISABLED' ? '启用' : '停用' }}
               </el-button>
               <el-button type="danger" size="small" @click="handleDelete(row.id)">删除</el-button>
             </div>
@@ -145,9 +145,10 @@
             </el-select>
           </el-form-item>
           <el-form-item label="档案状态">
-            <el-select v-model="form.status" placeholder="请选择档案状态">
-              <el-option v-for="item in statusOptions" :key="item.value" :label="item.label" :value="item.value" />
-            </el-select>
+            <el-tag :type="statusTagType(statusForHealth(form.healthStatus))">
+              {{ statusLabel(statusForHealth(form.healthStatus)) }}
+            </el-tag>
+            <span class="form-tip status-tip">健康状态为“健康”时自动可互动，其他状态自动休息中。</span>
           </el-form-item>
         </div>
 
@@ -286,9 +287,9 @@ const healthStatusOptions: Array<{ label: string; value: CatHealthStatus }> = [
 ]
 
 const statusOptions: Array<{ label: string; value: CatStatus }> = [
-  { label: '正常', value: 'AVAILABLE' },
-  { label: '已停用', value: 'RESTING' },
-  { label: '已领养', value: 'ADOPTED' },
+  { label: '可互动', value: 'AVAILABLE' },
+  { label: '休息中', value: 'RESTING' },
+  { label: '停用', value: 'DISABLED' },
 ]
 
 const genderOptions = [
@@ -492,7 +493,7 @@ async function handleSubmit() {
     const payload: CatProfile = {
       ...form,
       healthStatus: normalizeHealthStatus(form.healthStatus),
-      status: normalizeCatStatus(form.status),
+      status: statusForHealth(form.healthStatus),
     }
     if (editingId.value) await updateCat(editingId.value, payload)
     else await createCat(payload)
@@ -520,8 +521,9 @@ async function handleHealthChange(row: CatProfile, value: string) {
 
 async function handleToggleStatus(row: CatProfile) {
   if (!row.id) return
-  const nextStatus = normalizeCatStatus(row.status) === 'RESTING' ? 'AVAILABLE' : 'RESTING'
-  const actionText = nextStatus === 'AVAILABLE' ? '启用' : '停用'
+  const isDisabled = normalizeCatStatus(row.status) === 'DISABLED'
+  const nextStatus = isDisabled ? statusForHealth(row.healthStatus) : 'DISABLED'
+  const actionText = isDisabled ? '启用' : '停用'
   try {
     await ElMessageBox.confirm(`确认${actionText}“${row.name}”的猫咪档案吗？`, `${actionText}档案`, { type: 'warning' })
     await updateCatStatus(row.id, nextStatus)
@@ -621,9 +623,14 @@ function normalizeHealthStatus(value?: string): CatHealthStatus {
 
 function normalizeCatStatus(value?: string): CatStatus {
   if (value === 'ACTIVE') return 'AVAILABLE'
-  if (value === 'INACTIVE' || value === 'OFFLINE' || value === 'DISABLED') return 'RESTING'
-  if (value === 'RESTING' || value === 'ADOPTED') return value
+  if (value === 'INACTIVE' || value === 'OFFLINE' || value === '休息中' || value === '不可互动') return 'RESTING'
+  if (value === '停用' || value === '已停用') return 'DISABLED'
+  if (value === 'RESTING' || value === 'DISABLED') return value
   return 'AVAILABLE'
+}
+
+function statusForHealth(value?: string): CatStatus {
+  return normalizeHealthStatus(value) === '健康' ? 'AVAILABLE' : 'RESTING'
 }
 
 function healthStatusLabel(value?: string) {
@@ -663,7 +670,7 @@ function statusTagType(value?: string) {
   const normalized = normalizeCatStatus(value)
   if (normalized === 'AVAILABLE') return 'success'
   if (normalized === 'RESTING') return 'warning'
-  if (normalized === 'ADOPTED') return 'info'
+  if (normalized === 'DISABLED') return 'info'
   return 'info'
 }
 

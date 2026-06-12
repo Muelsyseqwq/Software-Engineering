@@ -28,8 +28,10 @@ public class CatService {
 
     private static final String HEALTHY = "健康";
     private static final String AVAILABLE = "AVAILABLE";
+    private static final String RESTING = "RESTING";
+    private static final String DISABLED = "DISABLED";
     private static final Set<String> HEALTH_STATUSES = Set.of("健康", "观察中", "治疗中", "恢复中");
-    private static final Set<String> CAT_STATUSES = Set.of("AVAILABLE", "RESTING", "ADOPTED");
+    private static final Set<String> CAT_STATUSES = Set.of("AVAILABLE", "RESTING", "DISABLED");
 
     private final CatMapper catMapper;
     private final CatHealthRecordMapper catHealthRecordMapper;
@@ -70,7 +72,7 @@ public class CatService {
         cat.setStoreId(storeIds.get(0));
         applyRequest(cat, request);
         cat.setHealthStatus(normalizeHealthStatus(request.healthStatus()));
-        cat.setStatus(normalizeCatStatus(request.status()));
+        syncStatusWithHealth(cat);
         cat.setDeleted(0);
         catMapper.insert(cat);
         insertHealthRecordFromCat(cat, caretakerId, "创建猫咪档案");
@@ -85,7 +87,7 @@ public class CatService {
         String oldInteract = cat.getInteract();
         applyRequest(cat, request);
         cat.setHealthStatus(normalizeHealthStatus(request.healthStatus()));
-        cat.setStatus(normalizeCatStatus(request.status()));
+        syncStatusWithHealth(cat);
         catMapper.updateById(cat);
         if (healthSnapshotChanged(oldWeight, oldVaccinium, oldInteract, cat)) {
             insertHealthRecordFromCat(cat, caretakerId, "更新猫咪档案");
@@ -96,13 +98,19 @@ public class CatService {
     public CatResponse updateHealthStatus(Long caretakerId, Long id, String healthStatus) {
         Cat cat = getExistingCat(caretakerId, id);
         cat.setHealthStatus(normalizeHealthStatus(healthStatus));
+        syncStatusWithHealth(cat);
         catMapper.updateById(cat);
         return toResponse(cat);
     }
 
     public CatResponse updateStatus(Long caretakerId, Long id, String status) {
         Cat cat = getExistingCat(caretakerId, id);
-        cat.setStatus(normalizeCatStatus(status));
+        String normalizedStatus = normalizeCatStatus(status);
+        if (DISABLED.equals(normalizedStatus)) {
+            cat.setStatus(DISABLED);
+        } else {
+            syncStatusWithHealth(cat);
+        }
         catMapper.updateById(cat);
         return toResponse(cat);
     }
@@ -283,14 +291,26 @@ public class CatService {
     private String normalizeCatStatus(String status) {
         String normalized = normalizeCode(status, AVAILABLE);
         normalized = switch (normalized) {
-            case "ACTIVE" -> "AVAILABLE";
-            case "INACTIVE", "OFFLINE", "DISABLED" -> "RESTING";
+            case "ACTIVE" -> AVAILABLE;
+            case "INACTIVE", "OFFLINE", "休息中", "不可互动" -> RESTING;
+            case "停用", "已停用" -> DISABLED;
             default -> normalized;
         };
         if (!CAT_STATUSES.contains(normalized)) {
             throw new BizException(4104, "档案状态不正确");
         }
         return normalized;
+    }
+
+    private void syncStatusWithHealth(Cat cat) {
+        if (DISABLED.equals(cat.getStatus())) {
+            return;
+        }
+        cat.setStatus(statusForHealth(cat.getHealthStatus()));
+    }
+
+    private String statusForHealth(String healthStatus) {
+        return HEALTHY.equals(normalizeHealthStatus(healthStatus)) ? AVAILABLE : RESTING;
     }
 
     private String normalizeCode(String value, String defaultValue) {
