@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.nekocafe.activity.mapper.PromotionActivityMapper">
+
+    <!-- Bypasses MyBatis-Plus global logic-delete filter so deleted rows can appear in the list -->
+    <select id="selectAllActivities" resultType="com.nekocafe.activity.entity.PromotionActivity">
+        SELECT * FROM promotion_activity
+        <where>
+            <if test="type != null and type != ''">
+                AND type = #{type}
+            </if>
+            <if test="status != null and status != ''">
+                <choose>
+                    <when test='status == "DELETED"'>
+                        AND deleted = 1
+                    </when>
+                    <otherwise>
+                        AND status = #{status}
+                        AND deleted = 0
+                    </otherwise>
+                </choose>
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>

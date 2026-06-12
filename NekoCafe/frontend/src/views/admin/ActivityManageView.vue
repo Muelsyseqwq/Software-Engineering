@@ -19,6 +19,7 @@
         <el-option label="草稿" value="DRAFT" />
         <el-option label="已发布" value="PUBLISHED" />
         <el-option label="已结束" value="ENDED" />
+        <el-option label="已删除" value="DELETED" />
       </el-select>
       <el-button type="primary" style="margin-left:auto" @click="openCreate">创建活动</el-button>
     </div>
@@ -43,10 +44,10 @@
       </el-table-column>
       <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
-          <el-button size="small" @click="openEdit(row)">编辑</el-button>
-          <el-button v-if="row.status !== 'PUBLISHED'" size="small" type="success" @click="openPublish(row)">发布</el-button>
-          <el-button size="small" type="warning" @click="openAcceptance(row)">门店接受</el-button>
-          <el-button size="small" type="danger" @click="handleDelete(row.id)">删除</el-button>
+          <el-button size="small" :disabled="row.status === 'DELETED'" @click="openEdit(row)">编辑</el-button>
+          <el-button v-if="row.status !== 'PUBLISHED'" size="small" type="success" :disabled="row.status === 'DELETED'" @click="openPublish(row)">发布</el-button>
+          <el-button size="small" type="warning" :disabled="row.status === 'DELETED'" @click="openAcceptance(row)">门店接受</el-button>
+          <el-button size="small" type="danger" :disabled="row.status === 'DELETED'" @click="handleDelete(row.id)">删除</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -243,8 +244,8 @@ async function openAcceptance(row: ActivityRow) {
 // --- helpers ---
 function fmt(v?: string) { return v ? v.slice(0, 16) : '-' }
 function typeLabel(t?: string) { const m: Record<string, string> = { PROMOTION: '促销', ENTERTAINMENT: '娱乐', NOTICE: '公告' }; return m[t || ''] || t || '-' }
-function statusLabel(s?: string) { const m: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ENDED: '已结束' }; return m[s || ''] || s || '-' }
-function statusTagType(s?: string) { if (s === 'PUBLISHED') return 'success'; if (s === 'DRAFT') return 'info'; return 'warning' }
+function statusLabel(s?: string) { const m: Record<string, string> = { DRAFT: '草稿', PUBLISHED: '已发布', ENDED: '已结束', DELETED: '已删除' }; return m[s || ''] || s || '-' }
+function statusTagType(s?: string) { if (s === 'PUBLISHED') return 'success'; if (s === 'DRAFT') return 'info'; if (s === 'DELETED') return 'danger'; return 'warning' }
 function accLabel(s?: string) { const m: Record<string, string> = { PENDING: '待接受', ACCEPTED: '已接受', REJECTED: '已拒绝' }; return m[s || ''] || s || '-' }
 function accType(s?: string) { if (s === 'ACCEPTED') return 'success'; if (s === 'REJECTED') return 'danger'; return 'warning' }
 </script>

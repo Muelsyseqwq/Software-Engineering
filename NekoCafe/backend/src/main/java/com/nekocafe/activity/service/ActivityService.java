@@ -35,16 +35,10 @@ public class ActivityService {
     }
 
     public List<ActivityRow> listActivities(String type, String status) {
-        LambdaQueryWrapper<PromotionActivity> wrapper = new LambdaQueryWrapper<PromotionActivity>()
-                .eq(PromotionActivity::getDeleted, 0)
-                .orderByDesc(PromotionActivity::getCreatedAt);
-        if (type != null && !type.isBlank()) {
-            wrapper.eq(PromotionActivity::getType, type);
-        }
-        if (status != null && !status.isBlank()) {
-            wrapper.eq(PromotionActivity::getStatus, status);
-        }
-        return activityMapper.selectList(wrapper).stream()
+        return activityMapper.selectAllActivities(
+                        type != null && !type.isBlank() ? type : null,
+                        status != null && !status.isBlank() ? status : null)
+                .stream()
                 .map(this::toActivityRow)
                 .toList();
     }
@@ -87,8 +81,14 @@ public class ActivityService {
         if (activity == null || activity.getDeleted() == 1) {
             throw new BizException(3001, "活动不存在");
         }
-        activity.setDeleted(1);
-        activityMapper.updateById(activity);
+        // Must use deleteById so MyBatis-Plus logic-delete interceptor handles the deleted column.
+        // Direct setDeleted(1) + updateById() is silently ignored because the global
+        // logic-delete-field config strips deleted from UPDATE statements.
+        activityMapper.deleteById(id);
+
+        // Also clean up associated activity_store records
+        activityStoreMapper.delete(new LambdaQueryWrapper<ActivityStore>()
+                .eq(ActivityStore::getActivityId, id));
     }
 
     @Transactional
@@ -100,6 +100,16 @@ public class ActivityService {
         // Update activity status to PUBLISHED
         activity.setStatus("PUBLISHED");
         activityMapper.updateById(activity);
+
+        // Remove activity_store rows for stores that are no longer selected
+        if (storeIds != null && !storeIds.isEmpty()) {
+            activityStoreMapper.delete(new LambdaQueryWrapper<ActivityStore>()
+                    .eq(ActivityStore::getActivityId, activityId)
+                    .notIn(ActivityStore::getStoreId, storeIds));
+        } else {
+            activityStoreMapper.delete(new LambdaQueryWrapper<ActivityStore>()
+                    .eq(ActivityStore::getActivityId, activityId));
+        }
 
         for (Long storeId : storeIds) {
             // Check if already exists
@@ -146,9 +156,10 @@ public class ActivityService {
     }
 
     private ActivityRow toActivityRow(PromotionActivity a) {
+        String displayStatus = Integer.valueOf(1).equals(a.getDeleted()) ? "DELETED" : a.getStatus();
         return new ActivityRow(
                 a.getId(), a.getTitle(), a.getType(), a.getDescription(),
-                a.getCoverUrl(), a.getStartAt(), a.getEndAt(), a.getStatus(),
+                a.getCoverUrl(), a.getStartAt(), a.getEndAt(), displayStatus,
                 a.getCreatedBy(), a.getCreatedAt(), a.getUpdatedAt());
     }
 
