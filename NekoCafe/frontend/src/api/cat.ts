@@ -21,6 +21,23 @@ export interface CatProfile {
   status?: CatStatus | string
 }
 
+export interface CatHealthRecord {
+  id?: number
+  catId?: number
+  recordDate: string
+  weight?: number
+  vaccinium?: string
+  interact?: string
+  note?: string
+  recordedBy?: number
+  createdAt?: string
+}
+
+export interface CatWeightTrendPoint {
+  label: string
+  value: number
+}
+
 export interface CatPhotoUploadResponse {
   photoUrl: string
 }
@@ -32,6 +49,21 @@ export async function fetchCats() {
 
 export async function fetchCat(id: number) {
   const { data } = await http.get<ApiResult<CatProfile>>(`/cats/${id}`)
+  return data.data
+}
+
+export async function fetchCatHealthRecords(id: number) {
+  const { data } = await http.get<ApiResult<CatHealthRecord[]>>(`/cats/${id}/health-records`)
+  return data.data
+}
+
+export async function fetchCatWeightTrend(id: number) {
+  const { data } = await http.get<ApiResult<CatWeightTrendPoint[]>>(`/cats/${id}/weight-trend`)
+  return data.data
+}
+
+export async function createCatHealthRecord(id: number, payload: CatHealthRecord) {
+  const { data } = await http.post<ApiResult<CatHealthRecord>>(`/cats/${id}/health-records`, payload)
   return data.data
 }
 
