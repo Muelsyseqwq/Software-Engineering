@@ -46,9 +46,9 @@
               </template>
             </el-table-column>
             <el-table-column prop="createdAt" label="创建时间" min-width="150" />
-            <el-table-column label="操作" width="100">
+            <el-table-column label="操作" width="120">
               <template #default="{ row }">
-                <span v-if="row.status === '已完成'" style="color: #67c23a;">已完成</span>
+                <el-button v-if="row.status === '已完成'" size="small" type="primary" text @click="openReviewDialog(row.id)">查看评价</el-button>
                 <span v-else-if="row.status === '制作中'">制作中</span>
                 <span v-else>-</span>
               </template>
@@ -57,17 +57,52 @@
         </div>
       </el-tab-pane>
     </el-tabs>
+
+    <!-- 查看评价弹窗 -->
+    <el-dialog v-model="reviewDialogVisible" title="订单评价" width="460px" :close-on-click-modal="true">
+      <div v-if="currentReview">
+        <div style="margin-bottom: 12px;">
+          <span style="color: #606266;">顾客：</span>
+          <span style="font-weight: 600;">{{ currentReview.customerName }}</span>
+        </div>
+        <div style="margin-bottom: 12px;">
+          <span style="color: #606266;">评分：</span>
+          <el-rate :model-value="currentReview.rating" disabled show-score text-color="#ff9900" />
+        </div>
+        <div style="margin-bottom: 12px;">
+          <span style="color: #606266;">评价内容：</span>
+          <div style="margin-top: 6px; padding: 10px; background: #f5f7fa; border-radius: 6px; line-height: 1.6;">
+            {{ currentReview.content || '暂无文字评价' }}
+          </div>
+        </div>
+        <div style="margin-bottom: 4px;">
+          <span style="color: #606266;">评价状态：</span>
+          <el-tag :type="getReviewStatusTagType(currentReview.status)">{{ currentReview.status }}</el-tag>
+        </div>
+        <div style="color: #909399; font-size: 13px; margin-top: 8px;">
+          评价时间：{{ currentReview.createdAt }}
+        </div>
+      </div>
+      <div v-else style="text-align: center; color: #909399; padding: 30px 0;">
+        该订单暂无评价
+      </div>
+      <template #footer>
+        <el-button @click="reviewDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { completeOrder, fetchHandledOrders, fetchPendingOrders, startOrder, type StaffOrderRow } from '@/api/staff'
+import { completeOrder, fetchHandledOrders, fetchOrderReview, fetchPendingOrders, startOrder, type StaffOrderRow, type StaffReviewRow } from '@/api/staff'
 
 const activeTab = ref('pending')
 const pendingList = ref<StaffOrderRow[]>([])
 const handledList = ref<StaffOrderRow[]>([])
+const reviewDialogVisible = ref(false)
+const currentReview = ref<StaffReviewRow | null>(null)
 
 function getOrderStatusTagType(status: string) {
   const typeMap: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
@@ -128,6 +163,25 @@ async function handleComplete(id: number) {
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '操作失败')
   }
+}
+
+async function openReviewDialog(orderId: number) {
+  try {
+    const review = await fetchOrderReview(orderId)
+    currentReview.value = review || null
+    reviewDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '加载评价失败')
+  }
+}
+
+function getReviewStatusTagType(status: string) {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'> = {
+    '显示中': 'success',
+    '已隐藏': 'info',
+    '待审核': 'warning',
+  }
+  return typeMap[status] || 'info'
 }
 
 onMounted(() => {

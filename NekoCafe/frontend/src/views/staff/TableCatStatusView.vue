@@ -141,7 +141,7 @@ async function loadCats() {
 function onTabChange() {
   if (activeTab.value === 'tables') {
     loadTables()
-  } else {
+  } else if (activeTab.value === 'cats') {
     loadCats()
   }
 }

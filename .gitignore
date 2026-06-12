@@ -65,3 +65,4 @@ allure-results/
 # Claude/session transient files
 .claude/settings.local.json
 .claude/worktrees/
+.workbuddy/

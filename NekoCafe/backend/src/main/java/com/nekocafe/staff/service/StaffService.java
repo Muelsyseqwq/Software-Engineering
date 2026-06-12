@@ -12,14 +12,19 @@ import com.nekocafe.reservation.entity.Reservation;
 import com.nekocafe.reservation.entity.ReservationSlot;
 import com.nekocafe.reservation.mapper.ReservationMapper;
 import com.nekocafe.reservation.mapper.ReservationSlotMapper;
+import com.nekocafe.customer.entity.Review;
+import com.nekocafe.customer.mapper.ReviewMapper;
 import com.nekocafe.staff.dto.StaffOrderRow;
 import com.nekocafe.staff.dto.StaffReservationRow;
+import com.nekocafe.staff.dto.StaffReviewRow;
 import com.nekocafe.store.entity.DiningTable;
 import com.nekocafe.store.entity.DiningTableStatusLog;
 import com.nekocafe.store.mapper.DiningTableMapper;
 import com.nekocafe.store.mapper.DiningTableStatusLogMapper;
 import com.nekocafe.store.entity.UserStoreRole;
 import com.nekocafe.store.mapper.UserStoreRoleMapper;
+import com.nekocafe.user.entity.User;
+import com.nekocafe.user.mapper.UserMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -48,6 +53,8 @@ public class StaffService {
     private final DiningTableStatusLogMapper diningTableStatusLogMapper;
     private final CatMapper catMapper;
     private final UserStoreRoleMapper userStoreRoleMapper;
+    private final ReviewMapper reviewMapper;
+    private final UserMapper userMapper;
 
     public StaffService(ReservationMapper reservationMapper,
                         ReservationSlotMapper reservationSlotMapper,
@@ -56,7 +63,9 @@ public class StaffService {
                         DiningTableMapper diningTableMapper,
                         DiningTableStatusLogMapper diningTableStatusLogMapper,
                         CatMapper catMapper,
-                        UserStoreRoleMapper userStoreRoleMapper) {
+                        UserStoreRoleMapper userStoreRoleMapper,
+                        ReviewMapper reviewMapper,
+                        UserMapper userMapper) {
         this.reservationMapper = reservationMapper;
         this.reservationSlotMapper = reservationSlotMapper;
         this.foodOrderMapper = foodOrderMapper;
@@ -65,6 +74,8 @@ public class StaffService {
         this.diningTableStatusLogMapper = diningTableStatusLogMapper;
         this.catMapper = catMapper;
         this.userStoreRoleMapper = userStoreRoleMapper;
+        this.reviewMapper = reviewMapper;
+        this.userMapper = userMapper;
     }
 
     private List<Long> resolveStoreIds(Long staffId) {
@@ -255,6 +266,57 @@ public class StaffService {
         diningTableStatusLogMapper.insert(log);
     }
 
+    public List<StaffReviewRow> listReviews(Long staffId) {
+        List<Long> storeIds = resolveStoreIds(staffId);
+        if (storeIds.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
+            .eq(Review::getDeleted, 0)
+            .in(Review::getStoreId, storeIds)
+            .orderByDesc(Review::getCreatedAt);
+
+        List<Review> reviews = reviewMapper.selectList(wrapper);
+        if (reviews.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<Long> userIds = reviews.stream().map(Review::getUserId).filter(Objects::nonNull).distinct().toList();
+        final Map<Long, User> userMap;
+        if (!userIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(userIds);
+            userMap = users.stream().collect(Collectors.toMap(User::getId, u -> u));
+        } else {
+            userMap = Collections.emptyMap();
+        }
+
+        List<Long> orderIds = reviews.stream().map(Review::getOrderId).filter(Objects::nonNull).distinct().toList();
+        final Map<Long, FoodOrder> orderMap;
+        if (!orderIds.isEmpty()) {
+            List<FoodOrder> orders = foodOrderMapper.selectBatchIds(orderIds);
+            orderMap = orders.stream().collect(Collectors.toMap(FoodOrder::getId, o -> o));
+        } else {
+            orderMap = Collections.emptyMap();
+        }
+
+        return reviews.stream().map(r -> {
+            User user = userMap.get(r.getUserId());
+            String customerName = user != null ? (user.getNickname() != null ? user.getNickname() : user.getUsername()) : "匿名顾客";
+            FoodOrder order = orderMap.get(r.getOrderId());
+            String orderNo = order != null ? order.getOrderNo() : "-";
+            return new StaffReviewRow(
+                r.getId(),
+                customerName,
+                orderNo,
+                r.getRating(),
+                r.getContent(),
+                translateReviewStatus(r.getStatus()),
+                r.getCreatedAt() != null ? r.getCreatedAt().toString() : ""
+            );
+        }).toList();
+    }
+
     private List<StaffOrderRow> mapOrdersToRows(List<FoodOrder> orders) {
         if (orders.isEmpty()) {
             return Collections.emptyList();
@@ -315,6 +377,41 @@ public class StaffService {
             case "CANCELLED" -> "已取消";
             case "REFUNDING" -> "退款中";
             case "REFUNDED" -> "已退款";
+            default -> status;
+        };
+    }
+
+    public StaffReviewRow getOrderReview(Long orderId) {
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
+            .eq(Review::getDeleted, 0)
+            .eq(Review::getOrderId, orderId)
+            .last("LIMIT 1");
+        Review review = reviewMapper.selectOne(wrapper);
+        if (review == null) {
+            return null;
+        }
+
+        User user = userMapper.selectById(review.getUserId());
+        String customerName = user != null ? (user.getNickname() != null ? user.getNickname() : user.getUsername()) : "匿名顾客";
+        FoodOrder order = foodOrderMapper.selectById(review.getOrderId());
+        String orderNo = order != null ? order.getOrderNo() : "-";
+
+        return new StaffReviewRow(
+            review.getId(),
+            customerName,
+            orderNo,
+            review.getRating(),
+            review.getContent(),
+            translateReviewStatus(review.getStatus()),
+            review.getCreatedAt() != null ? review.getCreatedAt().toString() : ""
+        );
+    }
+
+    private String translateReviewStatus(String status) {
+        return switch (status) {
+            case "VISIBLE" -> "显示中";
+            case "HIDDEN" -> "已隐藏";
+            case "PENDING" -> "待审核";
             default -> status;
         };
     }

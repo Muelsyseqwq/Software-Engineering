@@ -43,6 +43,16 @@ export interface Cat {
   status: string
 }
 
+export interface StaffReviewRow {
+  id: number
+  customerName: string
+  orderNo: string
+  rating: number
+  content: string
+  status: string
+  createdAt: string
+}
+
 export interface StaffQueueTicket {
   id: number
   queueNumber: number
@@ -103,6 +113,11 @@ export async function fetchTables(status?: string, capacity?: number) {
 
 export async function fetchCats(status?: string) {
   const { data } = await http.get<ApiResult<Cat[]>>('/staff/cats', { params: { status } })
+  return data.data
+}
+
+export async function fetchOrderReview(orderId: number) {
+  const { data } = await http.get<ApiResult<StaffReviewRow>>(`/staff/orders/${orderId}/review`)
   return data.data
 }
 

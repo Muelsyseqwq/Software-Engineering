@@ -8,6 +8,7 @@ import com.nekocafe.queue.service.WaitingQueueService.StaffQueueStatusResponse;
 import com.nekocafe.security.AuthPrincipal;
 import com.nekocafe.staff.dto.StaffOrderRow;
 import com.nekocafe.staff.dto.StaffReservationRow;
+import com.nekocafe.staff.dto.StaffReviewRow;
 import com.nekocafe.staff.service.StaffService;
 import com.nekocafe.store.entity.DiningTable;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -79,6 +80,12 @@ public class StaffController {
     public ApiResult<List<Cat>> listCats(@AuthenticationPrincipal AuthPrincipal principal,
                                           @RequestParam(required = false) String status) {
         return ApiResult.ok(staffService.listCats(principal.userId(), status));
+    }
+
+    @GetMapping("/orders/{id}/review")
+    public ApiResult<StaffReviewRow> getOrderReview(@PathVariable Long id) {
+        StaffReviewRow review = staffService.getOrderReview(id);
+        return ApiResult.ok(review);
     }
 
     @PutMapping("/tables/{id}/status")
