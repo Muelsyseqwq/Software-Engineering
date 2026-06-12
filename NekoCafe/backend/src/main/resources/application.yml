@@ -28,3 +28,5 @@ nekocafe:
   upload:
     cat-photo-dir: ${CAT_PHOTO_UPLOAD_DIR:uploads/cats}
     cat-photo-url-prefix: /uploads/cats
+    store-photo-dir: ${STORE_PHOTO_UPLOAD_DIR:uploads/stores}
+    store-photo-url-prefix: /uploads/stores

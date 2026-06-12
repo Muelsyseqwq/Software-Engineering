@@ -85,6 +85,88 @@ public class StoreService {
             .toList();
     }
 
+    public List<StoreSummaryResponse> adminList() {
+        return storeMapper.selectList(new LambdaQueryWrapper<Store>()
+                .eq(Store::getDeleted, 0)
+                .orderByAsc(Store::getCity)
+                .orderByAsc(Store::getId))
+            .stream()
+            .map(store -> toSummary(store, countAvailableTables(store.getId())))
+            .toList();
+    }
+
+    public StoreDetailResponse create(CreateStoreRequest request) {
+        if (request.name() == null || request.name().isBlank()) {
+            throw new BizException(400, "门店名称不能为空");
+        }
+        if (request.city() == null || request.city().isBlank()) {
+            throw new BizException(400, "城市不能为空");
+        }
+        if (request.address() == null || request.address().isBlank()) {
+            throw new BizException(400, "地址不能为空");
+        }
+
+        Store store = new Store();
+        applyRequestToStore(request, store);
+        store.setStatus(request.status() != null ? request.status() : "PREPARING");
+        storeMapper.insert(store);
+        return toDetail(store, List.of());
+    }
+
+    public StoreDetailResponse update(Long id, CreateStoreRequest request) {
+        Store store = storeMapper.selectOne(new LambdaQueryWrapper<Store>()
+            .eq(Store::getId, id)
+            .eq(Store::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (store == null) {
+            throw new BizException(2001, "门店不存在");
+        }
+        applyRequestToStore(request, store);
+        storeMapper.updateById(store);
+        return toDetail(store, List.of());
+    }
+
+    public void delete(Long id) {
+        Store store = storeMapper.selectOne(new LambdaQueryWrapper<Store>()
+            .eq(Store::getId, id)
+            .eq(Store::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (store == null) {
+            throw new BizException(2001, "门店不存在");
+        }
+        store.setDeleted(1);
+        storeMapper.updateById(store);
+    }
+
+    private void applyRequestToStore(CreateStoreRequest request, Store store) {
+        store.setName(request.name());
+        store.setCity(request.city());
+        store.setAddress(request.address());
+        store.setPhone(request.phone());
+        store.setOpeningTime(request.openingTime());
+        store.setClosingTime(request.closingTime());
+        store.setDescription(request.description());
+        store.setBusinessArea(request.businessArea());
+        store.setLatitude(request.latitude());
+        store.setLongitude(request.longitude());
+        store.setCoverUrl(request.coverUrl());
+        store.setAreaSquareMeter(request.areaSquareMeter());
+    }
+
+    private StoreDetailResponse toDetail(Store store, List<TableSummaryResponse> tables) {
+        return new StoreDetailResponse(
+            store.getId(),
+            store.getName(),
+            store.getCity(),
+            store.getAddress(),
+            store.getPhone(),
+            store.getOpeningTime(),
+            store.getClosingTime(),
+            store.getStatus(),
+            store.getDescription(),
+            tables
+        );
+    }
     private long countAvailableTables(Long storeId) {
         return diningTableMapper.selectCount(new LambdaQueryWrapper<DiningTable>()
             .eq(DiningTable::getStoreId, storeId)
@@ -189,4 +271,20 @@ public class StoreService {
 
     public record TableSummaryResponse(Long id, String tableNo, Integer capacity, String area, String status) {
     }
+
+    public record CreateStoreRequest(
+        String name,
+        String city,
+        String address,
+        String phone,
+        LocalTime openingTime,
+        LocalTime closingTime,
+        String status,
+        String description,
+        String businessArea,
+        BigDecimal latitude,
+        BigDecimal longitude,
+        String coverUrl,
+        BigDecimal areaSquareMeter
+    ) {}
 }

@@ -121,7 +121,7 @@ const roleDisplayNames: Record<RoleCode, string> = {
   CAT_CARETAKER: '猫咪健康簿',
   STORE_MANAGER: '门店掌柜',
   HQ_OPERATOR: '猫咖总控台',
-  ADMIN: '猫咖总控台',
+
 }
 
 const selectedRoleInfo = computed(() => roleOptions.find((item) => item.code === selectedRole.value) ?? roleOptions[0])

@@ -15,10 +15,10 @@ export const ROLE_HOME_MAP: Record<RoleCode, string> = {
   CAT_CARETAKER: '/cats',
   STORE_MANAGER: '/manager',
   HQ_OPERATOR: '/admin',
-  ADMIN: '/admin',
+
 }
 
-const ROLE_PRIORITY: RoleCode[] = ['ADMIN', 'HQ_OPERATOR', 'STORE_MANAGER', 'STAFF', 'CAT_CARETAKER', 'CUSTOMER']
+const ROLE_PRIORITY: RoleCode[] = ['HQ_OPERATOR', 'STORE_MANAGER', 'STAFF', 'CAT_CARETAKER', 'CUSTOMER']
 
 export const APP_MENU_ITEMS: AppMenuItem[] = [
   // Customer
@@ -44,11 +44,12 @@ export const APP_MENU_ITEMS: AppMenuItem[] = [
   { path: '/manager/staff', label: '员工排班', icon: '👥', hint: '雇佣、放假与排班', roles: ['STORE_MANAGER'] },
   { path: '/manager/activities', label: '活动确认', icon: '🎯', hint: '处理运营活动', roles: ['STORE_MANAGER'] },
   { path: '/manager/dishes', label: '菜品价格', icon: '🍰', hint: '菜品价格维护', roles: ['STORE_MANAGER'] },
-  // HQ_OPERATOR / ADMIN — separate pages in sidebar
-  { path: '/admin', label: '运营罗盘', icon: '📊', hint: '门店营收、坪效、翻台率与复购率', roles: ['HQ_OPERATOR', 'ADMIN'] },
-  { path: '/admin/activities', label: '活动管理', icon: '🎉', hint: '创建活动并发布给门店', roles: ['HQ_OPERATOR', 'ADMIN'] },
-  { path: '/admin/store-managers', label: '店长分配', icon: '👤', hint: '管理各门店的店长', roles: ['HQ_OPERATOR', 'ADMIN'] },
-  { path: '/admin/users', label: '用户与角色', icon: '⚙️', hint: '用户、角色与门店管理', roles: ['HQ_OPERATOR', 'ADMIN'] },
+  // HQ_OPERATOR — separate pages in sidebar
+  { path: '/admin', label: '运营罗盘', icon: '📊', hint: '门店营收、坪效、翻台率与复购率', roles: ['HQ_OPERATOR'] },
+  { path: '/admin/activities', label: '活动管理', icon: '🎉', hint: '创建活动并发布给门店', roles: ['HQ_OPERATOR'] },
+  { path: '/admin/store-managers', label: '店长分配', icon: '👤', hint: '管理各门店的店长', roles: ['HQ_OPERATOR'] },
+  { path: '/admin/stores', label: '门店管理', icon: '🏪', hint: '创建、编辑与管理门店', roles: ['HQ_OPERATOR'] },
+  { path: '/admin/users', label: '用户与角色', icon: '⚙️', hint: '用户、角色与门店管理', roles: ['HQ_OPERATOR'] },
 ]
 
 export function hasAnyRole(userRoles: RoleCode[], requiredRoles?: RoleCode[]) {
