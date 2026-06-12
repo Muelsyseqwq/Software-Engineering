@@ -57,31 +57,15 @@
         <el-form-item label="活动标题" required>
           <el-input v-model="form.title" placeholder="如：周末猫爪甜品节" />
         </el-form-item>
-        <el-row :gutter="12">
-          <el-col :span="12">
-            <el-form-item label="活动类型">
-              <el-select v-model="form.type" style="width:100%">
-                <el-option label="促销活动" value="PROMOTION" />
-                <el-option label="娱乐活动" value="ENTERTAINMENT" />
-                <el-option label="公告通知" value="NOTICE" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="状态">
-              <el-select v-model="form.status" style="width:100%">
-                <el-option label="草稿" value="DRAFT" />
-                <el-option label="已发布" value="PUBLISHED" />
-                <el-option label="已结束" value="ENDED" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
+        <el-form-item label="活动类型">
+          <el-select v-model="form.type" style="width:100%">
+            <el-option label="促销活动" value="PROMOTION" />
+            <el-option label="娱乐活动" value="ENTERTAINMENT" />
+            <el-option label="公告通知" value="NOTICE" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="活动描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="活动详细描述" />
-        </el-form-item>
-        <el-form-item label="封面图 URL">
-          <el-input v-model="form.coverUrl" placeholder="可选" />
         </el-form-item>
         <el-row :gutter="12">
           <el-col :span="12">
@@ -188,7 +172,7 @@ function resetForm() {
 function openCreate() { resetForm(); dialogVisible.value = true }
 function openEdit(row: ActivityRow) {
   editingId.value = row.id
-  Object.assign(form, { title: row.title, type: row.type, status: row.status, description: row.description || '', coverUrl: row.coverUrl || '', startAt: row.startAt, endAt: row.endAt })
+  Object.assign(form, { title: row.title, type: row.type, description: row.description || '', startAt: row.startAt, endAt: row.endAt })
   dialogVisible.value = true
 }
 
@@ -198,8 +182,6 @@ async function handleSave() {
       title: form.title,
       type: form.type,
       description: form.description,
-      coverUrl: form.coverUrl,
-      status: form.status,
     }
     if (form.startAt) payload.startAt = typeof form.startAt === 'string' ? form.startAt : (form.startAt as Date).toISOString()
     if (form.endAt) payload.endAt = typeof form.endAt === 'string' ? form.endAt : (form.endAt as Date).toISOString()

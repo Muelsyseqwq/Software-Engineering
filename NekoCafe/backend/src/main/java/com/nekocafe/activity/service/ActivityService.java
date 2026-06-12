@@ -58,7 +58,7 @@ public class ActivityService {
         activity.setCoverUrl(request.coverUrl());
         activity.setStartAt(request.startAt());
         activity.setEndAt(request.endAt());
-        activity.setStatus(request.status() != null ? request.status() : "DRAFT");
+        activity.setStatus("DRAFT");
         activity.setCreatedBy(request.createdBy());
         activityMapper.insert(activity);
         return toActivityRow(activity);
