@@ -6,7 +6,9 @@ import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
+import com.nekocafe.customer.entity.RefundRequest;
 import com.nekocafe.customer.entity.Review;
+import com.nekocafe.customer.mapper.RefundRequestMapper;
 import com.nekocafe.customer.mapper.ReviewMapper;
 import com.nekocafe.manager.dto.*;
 import com.nekocafe.manager.entity.*;
@@ -65,6 +67,9 @@ public class StoreManagerService {
     private static final String OPEN = "OPEN";
     private static final String CLOSED = "CLOSED";
     private static final String PREPARING = "PREPARING";
+    private static final String PAID = "PAID";
+    private static final String APPLIED = "APPLIED";
+    private static final String REJECTED = "REJECTED";
     private static final String AVAILABLE = "AVAILABLE";
     private static final String DISABLED = "DISABLED";
     private static final String UNAVAILABLE = "UNAVAILABLE";
@@ -79,7 +84,8 @@ public class StoreManagerService {
     private static final Set<String> TABLE_STATUSES = Set.of(AVAILABLE, "OCCUPIED", RESERVED, "CLEANING", DISABLED, UNAVAILABLE);
     private static final Set<String> RESERVATION_ACTION_STATUSES = Set.of(CHECKED_IN, COMPLETED, CANCELLED);
     private static final Set<String> SHIFT_STATUSES = Set.of(SCHEDULED, ON_LEAVE, CANCELLED, COMPLETED);
-    private static final Set<String> ACTIVITY_DECISIONS = Set.of("ACCEPTED", "REJECTED");
+    private static final Set<String> ACTIVITY_DECISIONS = Set.of("ACCEPTED", REJECTED);
+    private static final Set<String> REFUND_DECISIONS = Set.of(APPROVED, REJECTED);
     private static final DateTimeFormatter SLOT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final ManagerUserStoreRoleMapper userStoreRoleMapper;
@@ -102,6 +108,7 @@ public class StoreManagerService {
     private final DishMapper dishMapper;
     private final DishPriceHistoryMapper dishPriceHistoryMapper;
     private final ReviewMapper reviewMapper;
+    private final RefundRequestMapper refundRequestMapper;
 
     public StoreManagerService(
         ManagerUserStoreRoleMapper userStoreRoleMapper,
@@ -123,7 +130,8 @@ public class StoreManagerService {
         ManagerActivityStoreMapper activityStoreMapper,
         DishMapper dishMapper,
         DishPriceHistoryMapper dishPriceHistoryMapper,
-        ReviewMapper reviewMapper
+        ReviewMapper reviewMapper,
+        RefundRequestMapper refundRequestMapper
     ) {
         this.userStoreRoleMapper = userStoreRoleMapper;
         this.storeMapper = storeMapper;
@@ -145,6 +153,7 @@ public class StoreManagerService {
         this.dishMapper = dishMapper;
         this.dishPriceHistoryMapper = dishPriceHistoryMapper;
         this.reviewMapper = reviewMapper;
+        this.refundRequestMapper = refundRequestMapper;
     }
 
     public ManagerStoreInfo store(Long managerUserId) {
@@ -373,6 +382,57 @@ public class StoreManagerService {
             .orderByDesc(FoodOrder::getCreatedAt)
             .orderByDesc(FoodOrder::getId);
         return toOrderRows(foodOrderMapper.selectList(wrapper));
+    }
+
+    @Transactional
+    public ManagerOrderRow decideRefund(Long managerUserId, Long orderId, ManagerRefundDecisionRequest request) {
+        Long storeId = resolveManagedStoreId(managerUserId);
+        if (orderId == null) {
+            throw new BizException(2232, "请选择要处理退款的订单");
+        }
+        String decision = normalizeRequired(request == null ? null : request.decision(), "请选择退款处理结果").toUpperCase();
+        if (!REFUND_DECISIONS.contains(decision)) {
+            throw new BizException(2233, "退款处理结果只能为同意或拒绝");
+        }
+        String remark = normalizeOptional(request == null ? null : request.remark());
+        validateOptionalLength(remark, 500, "退款审核备注不能超过 500 个字符");
+        if (REJECTED.equals(decision) && remark == null) {
+            throw new BizException(2234, "拒绝退款时请填写原因");
+        }
+
+        FoodOrder order = foodOrderMapper.selectOne(new LambdaQueryWrapper<FoodOrder>()
+            .eq(FoodOrder::getId, orderId)
+            .eq(FoodOrder::getStoreId, storeId)
+            .eq(FoodOrder::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (order == null) {
+            throw new BizException(2231, "订单不存在或不属于当前门店");
+        }
+        if (!PAID.equals(order.getStatus()) || !APPLIED.equals(order.getRefundStatus())) {
+            throw new BizException(2235, "只有已支付且已申请退款的订单可以处理退款");
+        }
+
+        RefundRequest refund = refundRequestMapper.selectOne(new LambdaQueryWrapper<RefundRequest>()
+            .eq(RefundRequest::getOrderId, order.getId())
+            .eq(RefundRequest::getUserId, order.getUserId())
+            .eq(RefundRequest::getStatus, APPLIED)
+            .orderByDesc(RefundRequest::getCreatedAt)
+            .orderByDesc(RefundRequest::getId)
+            .last("LIMIT 1"));
+        if (refund == null) {
+            throw new BizException(2236, "退款申请不存在或已处理");
+        }
+
+        LocalDateTime reviewedAt = LocalDateTime.now();
+        refund.setStatus(decision);
+        refund.setReviewedBy(managerUserId);
+        refund.setReviewedAt(reviewedAt);
+        refund.setReviewRemark(remark);
+        refundRequestMapper.updateById(refund);
+
+        order.setRefundStatus(decision);
+        foodOrderMapper.updateById(order);
+        return toOrderRows(List.of(order)).get(0);
     }
 
     public ManagerOrderDetail orderDetail(Long managerUserId, Long id) {

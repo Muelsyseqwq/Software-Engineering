@@ -206,6 +206,11 @@ export interface ActivityDecisionPayload {
   remark?: string
 }
 
+export interface ManagerRefundDecisionPayload {
+  decision: 'APPROVED' | 'REJECTED'
+  remark?: string
+}
+
 export interface ManagerDishQuery {
   categoryId?: number
   status?: string
@@ -289,6 +294,11 @@ export async function fetchManagerOrders(params?: ManagerOrderQuery) {
 
 export async function fetchManagerOrderDetail(id: number) {
   const { data } = await http.get<ApiResult<ManagerOrderDetail>>(`/manager/orders/${id}`)
+  return data.data
+}
+
+export async function decideManagerRefund(orderId: number, payload: ManagerRefundDecisionPayload) {
+  const { data } = await http.put<ApiResult<ManagerOrderRow>>(`/manager/orders/${orderId}/refund`, payload)
   return data.data
 }
 

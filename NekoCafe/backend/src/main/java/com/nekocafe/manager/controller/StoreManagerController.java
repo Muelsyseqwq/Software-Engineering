@@ -111,6 +111,15 @@ public class StoreManagerController {
         return ApiResult.ok(storeManagerService.orders(principal.userId(), status, from, to));
     }
 
+    @PutMapping("/orders/{id}/refund")
+    public ApiResult<ManagerOrderRow> decideRefund(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long id,
+        @RequestBody ManagerRefundDecisionRequest request
+    ) {
+        return ApiResult.ok(storeManagerService.decideRefund(principal.userId(), id, request));
+    }
+
     @GetMapping("/orders/{id}")
     public ApiResult<ManagerOrderDetail> orderDetail(
         @AuthenticationPrincipal AuthPrincipal principal,
