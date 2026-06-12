@@ -6,7 +6,7 @@
         <h1>猫爪订单结算</h1>
         <p>选择门店与菜品后创建订单，再用沙箱支付完成顾客端主流程演示。</p>
       </div>
-      <el-select v-model="selectedStoreId" class="store-select" placeholder="选择门店" size="large" @change="loadMenu">
+      <el-select v-model="selectedStoreId" class="store-select" placeholder="选择门店" size="large" @change="handleStoreChange">
         <el-option v-for="store in stores" :key="store.id" :label="store.name" :value="store.id" />
       </el-select>
     </header>
@@ -54,6 +54,12 @@
           <strong class="total">¥{{ totalAmount.toFixed(2) }}</strong>
         </div>
 
+        <div v-if="selectedReservation" class="reservation-card">
+          <span>关联预约</span>
+          <strong>{{ selectedReservation.storeName }} · {{ selectedReservation.area || '座位区' }} · {{ selectedReservation.tableNo }}</strong>
+          <small>{{ selectedReservation.slotDate }} {{ formatShortTime(selectedReservation.startTime) }}-{{ formatShortTime(selectedReservation.endTime) }}</small>
+        </div>
+
         <div v-if="selectedItems.length" class="summary-list">
           <div v-for="item in selectedItems" :key="item.dish.id" class="summary-item">
             <span>{{ item.dish.name }} × {{ item.quantity }}</span>
@@ -76,7 +82,7 @@
         <div v-if="currentOrder" class="result-card">
           <span>订单 {{ currentOrder.orderNo }}</span>
           <strong>{{ getOrderStatusText(currentOrder.status) }}</strong>
-          <small>{{ currentOrder.storeName }} · ¥{{ Number(currentOrder.totalAmount).toFixed(2) }}</small>
+          <small>{{ currentOrder.storeName }}{{ currentOrder.tableNo ? ` · ${currentOrder.tableNo}` : '' }} · ¥{{ Number(currentOrder.totalAmount).toFixed(2) }}</small>
         </div>
         <div v-if="payment" class="result-card paid">
           <span>支付流水 {{ payment.paymentNo }}</span>
@@ -99,7 +105,10 @@
       </div>
       <el-table :data="orders" empty-text="暂无订单，先创建一笔沙箱订单吧">
         <el-table-column prop="orderNo" label="订单号" min-width="180" />
-        <el-table-column prop="storeName" label="门店" min-width="160" />
+        <el-table-column prop="storeName" label="门店" min-width="150" />
+        <el-table-column label="桌号" width="100">
+          <template #default="{ row }">{{ row.tableNo || '-' }}</template>
+        </el-table-column>
         <el-table-column label="金额" width="120">
           <template #default="{ row }">¥{{ Number(row.totalAmount).toFixed(2) }}</template>
         </el-table-column>
@@ -122,6 +131,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchStoreMenu, type DishItem, type MenuCategory } from '@/api/menu'
 import { fetchStores, type StoreSummary } from '@/api/store'
+import { fetchMyReservations, type ReservationRow } from '@/api/reservation'
 import { createOrder, fetchMyOrders, type OrderResponse } from '@/api/order'
 import { sandboxPay, type PaymentResponse } from '@/api/payment'
 
@@ -138,6 +148,7 @@ const remark = ref('')
 const currentOrder = ref<OrderResponse>()
 const payment = ref<PaymentResponse>()
 const orders = ref<OrderResponse[]>([])
+const selectedReservation = ref<ReservationRow>()
 
 const selectedItems = computed(() => categories.value
   .flatMap((category) => category.dishes)
@@ -151,6 +162,13 @@ async function loadStores() {
   stores.value = await fetchStores()
   const queryStoreId = Number(route.query.storeId)
   selectedStoreId.value = stores.value.some((store) => store.id === queryStoreId) ? queryStoreId : stores.value[0]?.id
+}
+
+async function handleStoreChange() {
+  if (selectedReservation.value?.storeId !== selectedStoreId.value) {
+    selectedReservation.value = undefined
+  }
+  await loadMenu()
 }
 
 async function loadMenu() {
@@ -167,6 +185,19 @@ async function loadMenu() {
   }
 }
 
+async function loadSelectedReservation() {
+  const reservationId = Number(route.query.reservationId)
+  if (!reservationId) return
+  const reservations = await fetchMyReservations()
+  const reservation = reservations.find((item) => item.id === reservationId)
+  if (!reservation) {
+    ElMessage.warning('未找到关联预约，将按普通点单创建订单')
+    return
+  }
+  selectedReservation.value = reservation
+  selectedStoreId.value = reservation.storeId
+}
+
 async function submitOrder() {
   if (!selectedStoreId.value || selectedItems.value.length === 0) return
   creating.value = true
@@ -174,6 +205,7 @@ async function submitOrder() {
   try {
     currentOrder.value = await createOrder({
       storeId: selectedStoreId.value,
+      reservationId: selectedReservation.value?.id,
       items: selectedItems.value.map((item: { dish: DishItem; quantity: number }) => ({ dishId: item.dish.id, quantity: item.quantity })),
       remark: remark.value,
     })
@@ -203,6 +235,10 @@ async function payOrder() {
 
 function formatOrderItems(order: OrderResponse) {
   return order.items.map((item) => `${item.dishName}×${item.quantity}`).join(' / ')
+}
+
+function formatShortTime(value: string) {
+  return value?.slice(0, 5) || '--:--'
 }
 
 function getOrderStatusText(status: string) {
@@ -240,6 +276,7 @@ async function loadOrders() {
 onMounted(async () => {
   try {
     await loadStores()
+    await loadSelectedReservation()
     await loadMenu()
     await loadOrders()
   } catch (error) {
@@ -267,6 +304,9 @@ onMounted(async () => {
 .summary-panel { position: sticky; top: 18px; display: grid; gap: 16px; }
 .total { color: #d97706; font-size: 28px; }
 .summary-list { display: grid; gap: 10px; }
+.reservation-card { display: grid; gap: 4px; border-radius: 18px; padding: 14px; background: rgba(217, 119, 6, 0.09); color: #5d3922; }
+.reservation-card span, .reservation-card small { color: #7c5f4a; }
+.reservation-card strong { color: #3b2618; }
 .summary-item { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed #f0cfaa; padding-bottom: 8px; color: #5d3922; }
 .result-card { display: grid; gap: 4px; border-radius: 18px; padding: 14px; background: rgba(217, 119, 6, 0.09); color: #5d3922; }
 .result-card strong { color: #d97706; font-size: 18px; }

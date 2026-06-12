@@ -37,10 +37,11 @@
           <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="130" fixed="right">
+      <el-table-column label="操作" width="170" fixed="right">
         <template #default="{ row }">
+          <el-button v-if="canOrder(row.status)" link type="primary" @click="goCheckout(row)">去点单</el-button>
           <el-button v-if="canCancel(row.status)" link type="danger" :loading="cancellingId === row.id" @click="handleCancel(row.id)">取消</el-button>
-          <span v-else class="muted">不可操作</span>
+          <span v-if="!canOrder(row.status) && !canCancel(row.status)" class="muted">不可操作</span>
         </template>
       </el-table-column>
     </el-table>
@@ -82,6 +83,14 @@ function statusType(status: string) {
 
 function canCancel(status: string) {
   return !['CANCELLED', 'CHECKED_IN', 'COMPLETED'].includes(status)
+}
+
+function canOrder(status: string) {
+  return ['RESERVED', 'CONFIRMED', 'PENDING_PAYMENT', 'CHECKED_IN'].includes(status)
+}
+
+function goCheckout(row: ReservationRow) {
+  router.push({ path: '/orders/checkout', query: { storeId: row.storeId, reservationId: row.id } })
 }
 
 async function loadReservations() {
