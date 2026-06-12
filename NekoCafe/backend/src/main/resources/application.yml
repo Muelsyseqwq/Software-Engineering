@@ -30,3 +30,12 @@ nekocafe:
     cat-photo-url-prefix: /uploads/cats
     store-photo-dir: ${STORE_PHOTO_UPLOAD_DIR:uploads/stores}
     store-photo-url-prefix: /uploads/stores
+  ai:
+    enabled: ${AI_ENABLED:false}
+    provider: ${AI_PROVIDER:openai-compatible}
+    base-url: ${AI_BASE_URL:https://api.deepseek.com}
+    api-key: ${AI_API_KEY:}
+    model: ${AI_MODEL:deepseek-v4-flash}
+    timeout-seconds: ${AI_TIMEOUT_SECONDS:20}
+    max-tokens: ${AI_MAX_TOKENS:50000}
+    temperature: ${AI_TEMPERATURE:0.3}

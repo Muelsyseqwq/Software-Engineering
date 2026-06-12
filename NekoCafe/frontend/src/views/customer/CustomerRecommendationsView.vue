@@ -100,7 +100,7 @@ function statusText(status: string) {
 async function loadRecommendations(params?: RecommendationParams) {
   loading.value = true
   try {
-    feed.value = await fetchCustomerRecommendations({ ...params, limit: 6 })
+    feed.value = await fetchCustomerRecommendations({ ...params, limit: 3 })
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '智能推荐加载失败')
   } finally {

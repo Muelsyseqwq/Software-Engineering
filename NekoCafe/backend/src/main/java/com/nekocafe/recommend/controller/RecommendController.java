@@ -1,6 +1,8 @@
 package com.nekocafe.recommend.controller;
 
 import com.nekocafe.common.result.ApiResult;
+import com.nekocafe.recommend.ai.AiReasonProperties;
+import com.nekocafe.recommend.ai.RecommendationReasonGenerator;
 import com.nekocafe.recommend.dto.RecommendationFeedResponse;
 import com.nekocafe.recommend.service.RecommendService;
 import com.nekocafe.security.AuthPrincipal;
@@ -19,14 +21,36 @@ import java.util.Map;
 public class RecommendController {
 
     private final RecommendService recommendService;
+    private final AiReasonProperties aiReasonProperties;
+    private final RecommendationReasonGenerator reasonGenerator;
 
-    public RecommendController(RecommendService recommendService) {
+    public RecommendController(
+        RecommendService recommendService,
+        AiReasonProperties aiReasonProperties,
+        RecommendationReasonGenerator reasonGenerator
+    ) {
         this.recommendService = recommendService;
+        this.aiReasonProperties = aiReasonProperties;
+        this.reasonGenerator = reasonGenerator;
     }
 
     @GetMapping("/status")
-    public ApiResult<Map<String, String>> status() {
-        return ApiResult.ok(Map.of("module", "recommend", "status", "ready"));
+    public ApiResult<Map<String, Object>> status() {
+        return ApiResult.ok(Map.ofEntries(
+            Map.entry("module", "recommend"),
+            Map.entry("status", "ready"),
+            Map.entry("aiEnabled", aiReasonProperties.isEnabled()),
+            Map.entry("aiConfigured", aiReasonProperties.getApiKey() != null && !aiReasonProperties.getApiKey().isBlank()),
+            Map.entry("aiAvailable", aiReasonProperties.available()),
+            Map.entry("aiProvider", aiReasonProperties.getProvider()),
+            Map.entry("aiBaseUrl", aiReasonProperties.getBaseUrl()),
+            Map.entry("aiModel", aiReasonProperties.getModel()),
+            Map.entry("aiTimeoutSeconds", aiReasonProperties.getTimeoutSeconds()),
+            Map.entry("aiMaxTokens", aiReasonProperties.getMaxTokens()),
+            Map.entry("aiLastStatus", reasonGenerator.lastStatus()),
+            Map.entry("aiLastErrorType", reasonGenerator.lastErrorType()),
+            Map.entry("aiLastErrorMessage", reasonGenerator.lastErrorMessage())
+        ));
     }
 
     @GetMapping("/customer")

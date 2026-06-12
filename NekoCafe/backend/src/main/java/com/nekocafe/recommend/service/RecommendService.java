@@ -19,6 +19,7 @@ import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.entity.FoodOrderItem;
 import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
+import com.nekocafe.recommend.ai.RecommendationReasonGenerator;
 import com.nekocafe.recommend.dto.RecommendationFeedResponse;
 import com.nekocafe.recommend.dto.RecommendationHighlight;
 import com.nekocafe.recommend.dto.RecommendationStoreItem;
@@ -63,6 +64,7 @@ public class RecommendService {
     private final FoodOrderMapper orderMapper;
     private final FoodOrderItemMapper orderItemMapper;
     private final ReviewMapper reviewMapper;
+    private final RecommendationReasonGenerator reasonGenerator;
 
     public RecommendService(
         StoreMapper storeMapper,
@@ -74,7 +76,8 @@ public class RecommendService {
         ActivityStoreMapper activityStoreMapper,
         FoodOrderMapper orderMapper,
         FoodOrderItemMapper orderItemMapper,
-        ReviewMapper reviewMapper
+        ReviewMapper reviewMapper,
+        RecommendationReasonGenerator reasonGenerator
     ) {
         this.storeMapper = storeMapper;
         this.userPreferenceMapper = userPreferenceMapper;
@@ -86,10 +89,11 @@ public class RecommendService {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
         this.reviewMapper = reviewMapper;
+        this.reasonGenerator = reasonGenerator;
     }
 
     public RecommendationFeedResponse customerRecommendations(Long userId, BigDecimal latitude, BigDecimal longitude, Integer limit) {
-        int max = Math.min(Math.max(limit == null ? 6 : limit, 1), 12);
+        int max = Math.min(Math.max(limit == null ? 3 : limit, 1), 3);
         List<Store> stores = storeMapper.selectList(new LambdaQueryWrapper<Store>()
             .eq(Store::getDeleted, 0)
             .eq(Store::getStatus, OPEN)
@@ -125,6 +129,7 @@ public class RecommendService {
         for (int i = 0; i < scored.size(); i++) {
             items.add(toItem(i + 1, scored.get(i)));
         }
+        items = reasonGenerator.enhanceReasons(items);
         String summary = buildSummary(items, preferences, latitude != null && longitude != null);
         return new RecommendationFeedResponse(LocalDateTime.now(), summary, items);
     }
