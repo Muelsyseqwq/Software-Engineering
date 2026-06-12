@@ -3,6 +3,7 @@ package com.nekocafe.auth.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nekocafe.auth.dto.AuthResponse;
 import com.nekocafe.auth.dto.AuthUserResponse;
+import com.nekocafe.auth.dto.AuthUserResponse.AuthAssignedStore;
 import com.nekocafe.auth.dto.LoginRequest;
 import com.nekocafe.auth.dto.RegisterRequest;
 import com.nekocafe.common.exception.BizException;
@@ -36,6 +37,8 @@ public class AuthService {
 
     private static final String ACTIVE = "ACTIVE";
     private static final String CUSTOMER = "CUSTOMER";
+    private static final String STAFF = "STAFF";
+    private static final String STORE_MANAGER = "STORE_MANAGER";
     private static final String CAT_CARETAKER = "CAT_CARETAKER";
 
     private final UserMapper userMapper;
@@ -184,7 +187,7 @@ public class AuthService {
     }
 
     private AuthUserResponse toUserResponse(User user, List<String> roles) {
-        CaretakerStoreInfo storeInfo = resolveCaretakerStoreInfo(user.getId(), roles);
+        AssignedStoreInfo storeInfo = resolveAssignedStoreInfo(user.getId(), roles);
         return new AuthUserResponse(
             user.getId(),
             user.getUsername(),
@@ -194,22 +197,23 @@ public class AuthService {
             roles,
             storeInfo.storeId(),
             storeInfo.storeName(),
-            storeInfo.storeNames()
+            storeInfo.storeNames(),
+            storeInfo.stores()
         );
     }
 
-    private CaretakerStoreInfo resolveCaretakerStoreInfo(Long userId, List<String> roles) {
-        if (userId == null || roles == null || !roles.contains(CAT_CARETAKER)) {
-            return new CaretakerStoreInfo(null, null, List.of());
+    private AssignedStoreInfo resolveAssignedStoreInfo(Long userId, List<String> roles) {
+        if (userId == null || roles == null || roles.stream().noneMatch(this::isStoreScopedRole)) {
+            return new AssignedStoreInfo(null, null, List.of(), List.of());
         }
 
         List<UserStoreRole> userStoreRoles = userStoreRoleMapper.selectList(new LambdaQueryWrapper<UserStoreRole>()
             .eq(UserStoreRole::getUserId, userId)
-            .eq(UserStoreRole::getRoleCode, CAT_CARETAKER)
+            .in(UserStoreRole::getRoleCode, roles.stream().filter(this::isStoreScopedRole).toList())
             .eq(UserStoreRole::getStatus, ACTIVE)
             .orderByAsc(UserStoreRole::getStoreId));
         if (userStoreRoles.isEmpty()) {
-            return new CaretakerStoreInfo(null, null, List.of());
+            return new AssignedStoreInfo(null, null, List.of(), List.of());
         }
 
         List<Long> storeIds = userStoreRoles.stream()
@@ -218,12 +222,12 @@ public class AuthService {
             .distinct()
             .toList();
         if (storeIds.isEmpty()) {
-            return new CaretakerStoreInfo(null, null, List.of());
+            return new AssignedStoreInfo(null, null, List.of(), List.of());
         }
 
         List<Store> stores = storeMapper.selectBatchIds(storeIds);
         if (stores == null || stores.isEmpty()) {
-            return new CaretakerStoreInfo(null, null, List.of());
+            return new AssignedStoreInfo(null, null, List.of(), List.of());
         }
 
         List<Store> orderedStores = storeIds.stream()
@@ -235,22 +239,30 @@ public class AuthService {
             .filter(store -> !Objects.equals(store.getDeleted(), 1))
             .toList();
         if (orderedStores.isEmpty()) {
-            return new CaretakerStoreInfo(null, null, List.of());
+            return new AssignedStoreInfo(null, null, List.of(), List.of());
         }
 
-        List<String> storeNames = orderedStores.stream()
-            .map(Store::getName)
+        List<AuthAssignedStore> assignedStores = orderedStores.stream()
+            .map(store -> new AuthAssignedStore(store.getId(), store.getName(), store.getCity(), store.getAddress()))
+            .toList();
+        List<String> storeNames = assignedStores.stream()
+            .map(AuthAssignedStore::name)
             .filter(name -> name != null && !name.isBlank())
             .toList();
-        Store primaryStore = orderedStores.get(0);
-        return new CaretakerStoreInfo(
-            primaryStore.getId(),
-            primaryStore.getName(),
-            storeNames
+        AuthAssignedStore primaryStore = assignedStores.get(0);
+        return new AssignedStoreInfo(
+            primaryStore.id(),
+            primaryStore.name(),
+            storeNames,
+            assignedStores
         );
     }
 
-    private record CaretakerStoreInfo(Long storeId, String storeName, List<String> storeNames) {
+    private boolean isStoreScopedRole(String role) {
+        return STAFF.equals(role) || STORE_MANAGER.equals(role) || CAT_CARETAKER.equals(role);
+    }
+
+    private record AssignedStoreInfo(Long storeId, String storeName, List<String> storeNames, List<AuthAssignedStore> stores) {
     }
 
     private List<String> loadRoleCodes(Long userId) {

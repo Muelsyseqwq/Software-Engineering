@@ -1,7 +1,7 @@
 <template>
   <section class="page-card profile-page">
     <header class="page-header">
-      <div><p class="eyebrow">PAW MEMBER</p><h1>会员与偏好</h1><p>查看猫爪积分、消费累计和个性化偏好，后续推荐会优先参考这些标签。</p></div>
+      <div><p class="eyebrow">PAW MEMBER</p><h1>会员与偏好</h1><p>在猫爪兑换柜台查看积分、兑换奖励，也可以继续维护个性化偏好。</p></div>
       <el-button type="primary" round :loading="saving" @click="savePreferences">保存偏好</el-button>
     </header>
 
@@ -23,13 +23,45 @@
       </section>
     </div>
 
+    <section class="section-card rewards-card" v-loading="loading">
+      <div class="section-heading">
+        <div><p class="eyebrow">PAW EXCHANGE</p><h2>猫爪兑换柜台</h2><span>挑选一张猫咖奖励券，用积分兑换到店小惊喜。</span></div>
+        <el-button round @click="loadData">刷新</el-button>
+      </div>
+      <el-empty v-if="!rewards.length" description="暂无可兑换奖励" />
+      <div v-else class="reward-grid">
+        <article v-for="reward in rewards" :key="reward.id" class="reward-card">
+          <div class="ticket-stub">{{ rewardIcon(reward.rewardType) }}</div>
+          <div class="reward-body">
+            <div class="reward-title"><h3>{{ reward.name }}</h3><el-tag effect="plain">{{ rewardTypeText(reward.rewardType) }}</el-tag></div>
+            <p>{{ reward.description || '兑换后到店出示记录即可使用。' }}</p>
+            <div class="reward-meta"><strong>{{ reward.pointsCost }} 积分</strong><span>{{ stockText(reward.stock) }}</span></div>
+            <el-button type="primary" round :disabled="!canRedeem(reward)" :loading="redeemingId === reward.id" @click="confirmRedeem(reward)">
+              {{ redeemButtonText(reward) }}
+            </el-button>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section class="section-card transactions-card">
-      <div class="section-heading"><div><p class="eyebrow">POINT HISTORY</p><h2>积分流水</h2></div><el-button round @click="loadData">刷新</el-button></div>
+      <div class="section-heading"><div><p class="eyebrow">REDEMPTIONS</p><h2>最近兑换记录</h2></div></div>
+      <el-table :data="redemptions" empty-text="暂无兑换记录">
+        <el-table-column prop="redeemedAt" label="时间" min-width="160"><template #default="{ row }">{{ formatTime(row.redeemedAt) }}</template></el-table-column>
+        <el-table-column prop="redemptionNo" label="兑换号" min-width="180" />
+        <el-table-column prop="rewardName" label="奖励" min-width="180" />
+        <el-table-column prop="pointsCost" label="消耗积分" width="120" />
+        <el-table-column prop="status" label="状态" width="110"><template #default="{ row }"><el-tag type="success">{{ redemptionStatusText(row.status) }}</el-tag></template></el-table-column>
+      </el-table>
+    </section>
+
+    <section class="section-card transactions-card">
+      <div class="section-heading"><div><p class="eyebrow">POINT HISTORY</p><h2>积分流水</h2></div></div>
       <el-table :data="points?.transactions || []" empty-text="暂无积分流水">
         <el-table-column prop="createdAt" label="时间" min-width="160"><template #default="{ row }">{{ formatTime(row.createdAt) }}</template></el-table-column>
         <el-table-column prop="type" label="类型" width="100" />
         <el-table-column prop="description" label="说明" min-width="220" />
-        <el-table-column prop="points" label="积分" width="100"><template #default="{ row }"><strong class="points-plus">+{{ row.points }}</strong></template></el-table-column>
+        <el-table-column prop="points" label="积分" width="100"><template #default="{ row }"><strong :class="row.points >= 0 ? 'points-plus' : 'points-minus'">{{ formatPoints(row.points) }}</strong></template></el-table-column>
         <el-table-column prop="balanceAfter" label="余额" width="100" />
       </el-table>
     </section>
@@ -38,8 +70,18 @@
 
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { fetchCustomerPoints, fetchCustomerPreferences, saveCustomerPreferences, type PointsSummaryResponse } from '@/api/customer'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  fetchCustomerPoints,
+  fetchCustomerPreferences,
+  fetchMyRedemptions,
+  fetchRewardCatalog,
+  redeemReward,
+  saveCustomerPreferences,
+  type PointsSummaryResponse,
+  type RewardCatalogResponse,
+  type RewardRedemptionResponse,
+} from '@/api/customer'
 
 const preferenceGroups = [
   { type: 'TASTE', label: '口味偏好', items: ['少糖', '少冰', '咖啡', '甜品', '茶饮'] },
@@ -49,20 +91,50 @@ const preferenceGroups = [
 ]
 const loading = ref(false)
 const saving = ref(false)
+const redeemingId = ref<number>()
 const points = ref<PointsSummaryResponse>()
+const rewards = ref<RewardCatalogResponse[]>([])
+const redemptions = ref<RewardRedemptionResponse[]>([])
 const selected = reactive<Record<string, string[]>>({ TASTE: [], CAT: [], SEAT: [], ALLERGY: [] })
 function formatTime(value: string) { return value ? value.replace('T', ' ').slice(0, 16) : '-' }
+function formatPoints(value: number) { return value >= 0 ? `+${value}` : String(value) }
+function rewardIcon(type: string) { return ({ COUPON: '🎫', SERVICE: '🐾', ITEM: '☕' } as Record<string, string>)[type] || '🎁' }
+function rewardTypeText(type: string) { return ({ COUPON: '券包', SERVICE: '服务', ITEM: '实物' } as Record<string, string>)[type] || type }
+function stockText(stock?: number | null) { return stock == null ? '不限库存' : stock > 0 ? `剩余 ${stock} 份` : '已兑完' }
+function canRedeem(reward: RewardCatalogResponse) { return (points.value?.points ?? 0) >= reward.pointsCost && (reward.stock == null || reward.stock > 0) }
+function redeemButtonText(reward: RewardCatalogResponse) {
+  if (reward.stock != null && reward.stock <= 0) return '已兑完'
+  if ((points.value?.points ?? 0) < reward.pointsCost) return '积分不足'
+  return '立即兑换'
+}
+function redemptionStatusText(status: string) { return status === 'REDEEMED' ? '已兑换' : status }
 async function loadData() {
   loading.value = true
   try {
-    points.value = await fetchCustomerPoints()
-    const preferences = await fetchCustomerPreferences()
+    const [pointsData, preferences, rewardData, redemptionData] = await Promise.all([
+      fetchCustomerPoints(),
+      fetchCustomerPreferences(),
+      fetchRewardCatalog(),
+      fetchMyRedemptions(),
+    ])
+    points.value = pointsData
+    rewards.value = rewardData
+    redemptions.value = redemptionData
     Object.keys(selected).forEach((key) => { selected[key] = [] })
     preferences.forEach((item) => {
       if (!selected[item.preferenceType]) selected[item.preferenceType] = []
       selected[item.preferenceType].push(item.preferenceValue)
     })
   } catch (error) { ElMessage.error(error instanceof Error ? error.message : '会员信息加载失败') } finally { loading.value = false }
+}
+async function confirmRedeem(reward: RewardCatalogResponse) {
+  await ElMessageBox.confirm(`确认使用 ${reward.pointsCost} 积分兑换「${reward.name}」吗？`, '兑换奖励', { type: 'warning' })
+  redeemingId.value = reward.id
+  try {
+    const result = await redeemReward(reward.id)
+    ElMessage.success(`兑换成功，剩余 ${result.balanceAfter} 积分`)
+    await loadData()
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : '兑换失败') } finally { redeemingId.value = undefined }
 }
 async function savePreferences() {
   saving.value = true
@@ -82,7 +154,17 @@ onMounted(loadData)
 .member-card span { margin-top: 12px; opacity: 0.78; }
 .preference-group { margin-top: 18px; }
 .preference-group h3 { margin: 0 0 12px; color: #3b2618; }
-.transactions-card { margin-top: 22px; }
+.rewards-card, .transactions-card { margin-top: 22px; }
+.reward-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.reward-card { display: grid; grid-template-columns: 72px 1fr; overflow: hidden; border: 1px solid #f5dfc5; border-radius: 22px; background: linear-gradient(135deg, #fffaf4, #fff); box-shadow: 0 16px 34px rgba(146, 64, 14, 0.08); }
+.ticket-stub { display: grid; place-items: center; background: repeating-linear-gradient(180deg, #fde8c8, #fde8c8 12px, #fff2dc 12px, #fff2dc 24px); font-size: 34px; }
+.reward-body { padding: 18px; display: grid; gap: 12px; }
+.reward-title { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.reward-title h3 { margin: 0; color: #3b2618; }
+.reward-body p { margin: 0; color: rgba(59,38,24,0.62); line-height: 1.7; }
+.reward-meta { display: flex; justify-content: space-between; gap: 10px; color: #8a6a52; font-weight: 800; }
+.reward-meta strong { color: #d97706; }
 .points-plus { color: #16a34a; }
+.points-minus { color: #dc2626; }
 @media (max-width: 860px) { .profile-grid { grid-template-columns: 1fr; } }
 </style>

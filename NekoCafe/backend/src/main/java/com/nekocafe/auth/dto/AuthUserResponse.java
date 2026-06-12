@@ -11,6 +11,8 @@ public record AuthUserResponse(
     List<String> roles,
     Long storeId,
     String storeName,
-    List<String> storeNames
+    List<String> storeNames,
+    List<AuthAssignedStore> stores
 ) {
+    public record AuthAssignedStore(Long id, String name, String city, String address) {}
 }
