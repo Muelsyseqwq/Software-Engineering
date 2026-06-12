@@ -43,12 +43,13 @@ const router = createRouter({
         { path: 'manager/staff', name: 'store-manager-staff', component: () => import('@/views/manager/StoreManagerView.vue'), meta: { requiresAuth: true, roles: ['STORE_MANAGER'], managerTab: 'staff' } },
         { path: 'manager/activities', name: 'store-manager-activities', component: () => import('@/views/manager/StoreManagerView.vue'), meta: { requiresAuth: true, roles: ['STORE_MANAGER'], managerTab: 'activities' } },
         { path: 'manager/dishes', name: 'store-manager-dishes', component: () => import('@/views/manager/StoreManagerView.vue'), meta: { requiresAuth: true, roles: ['STORE_MANAGER'], managerTab: 'dishes' } },
-        // HQ_OPERATOR / ADMIN pages
+        // HQ_OPERATOR pages
         { path: 'dashboard', redirect: '/admin' },
-        { path: 'admin', name: 'admin-overview', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
-        { path: 'admin/activities', name: 'admin-activities', component: () => import('@/views/admin/ActivityManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
-        { path: 'admin/store-managers', name: 'admin-store-managers', component: () => import('@/views/admin/StoreManagerManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
-        { path: 'admin/users', name: 'admin-users', component: () => import('@/views/admin/UserRoleView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR', 'ADMIN'] } },
+        { path: 'admin', name: 'admin-overview', component: () => import('@/views/dashboard/DashboardView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR'] } },
+        { path: 'admin/activities', name: 'admin-activities', component: () => import('@/views/admin/ActivityManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR'] } },
+        { path: 'admin/store-managers', name: 'admin-store-managers', component: () => import('@/views/admin/StoreManagerManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR'] } },
+        { path: 'admin/stores', name: 'admin-stores', component: () => import('@/views/admin/StoreManageView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR'] } },
+        { path: 'admin/users', name: 'admin-users', component: () => import('@/views/admin/UserRoleView.vue'), meta: { requiresAuth: true, roles: ['HQ_OPERATOR'] } },
         { path: '403', name: 'forbidden', component: () => import('@/views/error/ForbiddenView.vue') },
       ],
     },

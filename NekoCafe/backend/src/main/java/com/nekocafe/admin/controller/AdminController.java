@@ -2,7 +2,6 @@ package com.nekocafe.admin.controller;
 
 import com.nekocafe.admin.service.AdminService;
 import com.nekocafe.admin.service.AdminService.AdminRoleRow;
-import com.nekocafe.admin.service.AdminService.AdminStoreRow;
 import com.nekocafe.admin.service.AdminService.AdminUserRow;
 import com.nekocafe.admin.service.AdminService.CreateStoreManagerRequest;
 import com.nekocafe.admin.service.AdminService.StoreManagerRow;
@@ -17,7 +16,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin")
-@PreAuthorize("hasAnyRole('HQ_OPERATOR', 'ADMIN')")
+@PreAuthorize("hasRole('HQ_OPERATOR')")
 public class AdminController {
 
     private final AdminService adminService;
@@ -41,11 +40,6 @@ public class AdminController {
     @GetMapping("/roles")
     public ApiResult<List<AdminRoleRow>> roles() {
         return ApiResult.ok(adminService.roles());
-    }
-
-    @GetMapping("/stores")
-    public ApiResult<List<AdminStoreRow>> stores() {
-        return ApiResult.ok(adminService.stores());
     }
 
     @GetMapping("/store-managers")

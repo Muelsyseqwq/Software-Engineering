@@ -115,7 +115,7 @@ async function toggleStatus(userId: number, newStatus: string) {
 function roleLabel(code: string) {
   const m: Record<string, string> = {
     CUSTOMER: '顾客', STAFF: '店员', STORE_MANAGER: '店长',
-    HQ_OPERATOR: '总部运营', CAT_CARETAKER: '猫咪管家', ADMIN: '管理员',
+    HQ_OPERATOR: '总部运营', CAT_CARETAKER: '猫咪管家',
   }
   return m[code] || code
 }

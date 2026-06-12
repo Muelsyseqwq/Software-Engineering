@@ -1,4 +1,4 @@
-export type RoleCode = 'CUSTOMER' | 'STAFF' | 'STORE_MANAGER' | 'HQ_OPERATOR' | 'CAT_CARETAKER' | 'ADMIN'
+export type RoleCode = 'CUSTOMER' | 'STAFF' | 'STORE_MANAGER' | 'HQ_OPERATOR' | 'CAT_CARETAKER'
 
 export interface LoginRequest {
   account: string

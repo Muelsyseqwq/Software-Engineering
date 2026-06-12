@@ -85,16 +85,6 @@ public class AdminService {
                 .toList();
     }
 
-    // ---- stores ----
-
-    public List<AdminStoreRow> stores() {
-        return storeMapper.selectList(
-                new LambdaQueryWrapper<Store>().eq(Store::getDeleted, 0).orderByAsc(Store::getId))
-                .stream()
-                .map(s -> new AdminStoreRow(s.getId(), s.getName(), s.getCity(), s.getAddress(), s.getStatus()))
-                .toList();
-    }
-
     // ---- store managers ----
 
     public List<StoreManagerRow> storeManagers() {
@@ -287,8 +277,6 @@ public class AdminService {
                                String email, String status, List<String> roles) {}
 
     public record AdminRoleRow(Long id, String code, String name, String description) {}
-
-    public record AdminStoreRow(Long id, String name, String city, String address, String status) {}
 
     public record StoreManagerRow(Long id, Long userId, String username, String nickname,
                                   Long storeId, String storeName, String status,

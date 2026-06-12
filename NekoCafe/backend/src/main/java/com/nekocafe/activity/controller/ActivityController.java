@@ -13,7 +13,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/activity")
-@PreAuthorize("hasAnyRole('HQ_OPERATOR', 'ADMIN')")
+@PreAuthorize("hasRole('HQ_OPERATOR')")
 public class ActivityController {
 
     private final ActivityService activityService;

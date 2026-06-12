@@ -18,12 +18,41 @@ export interface AdminRoleRow {
   description?: string
 }
 
-export interface AdminStoreRow {
+export interface AdminStoreDetailRow {
   id: number
   name: string
   city: string
   address: string
+  phone?: string
+  openingTime: string
+  closingTime: string
   status: string
+  description?: string
+  businessArea?: string
+  latitude?: number
+  longitude?: number
+  coverUrl?: string
+  areaSquareMeter?: number
+  availableTableCount: number
+}
+
+/** @deprecated Use AdminStoreDetailRow instead */
+export type AdminStoreRow = AdminStoreDetailRow
+
+export interface CreateStoreRequest {
+  name: string
+  city: string
+  address: string
+  phone?: string
+  openingTime?: string
+  closingTime?: string
+  status?: string
+  description?: string
+  businessArea?: string
+  latitude?: number
+  longitude?: number
+  coverUrl?: string
+  areaSquareMeter?: number
 }
 
 export interface StoreManagerRow {
@@ -53,7 +82,7 @@ export async function fetchAdminRoles() {
 }
 
 export async function fetchAdminStores() {
-  const { data } = await http.get<ApiResult<AdminStoreRow[]>>('/admin/stores')
+  const { data } = await http.get<ApiResult<AdminStoreDetailRow[]>>('/admin/stores')
   return data.data
 }
 
@@ -85,5 +114,36 @@ export interface CreateStoreManagerWithUserRequest {
 
 export async function createStoreManagerWithUser(req: CreateStoreManagerWithUserRequest) {
   const { data } = await http.post<ApiResult<AdminUserRow>>('/admin/store-managers/with-user', req)
+  return data.data
+}
+
+// ---- store management ----
+
+export async function fetchAdminStoreList() {
+  const { data } = await http.get<ApiResult<AdminStoreDetailRow[]>>('/admin/stores')
+  return data.data
+}
+
+export async function createStore(req: CreateStoreRequest) {
+  const { data } = await http.post<ApiResult<AdminStoreDetailRow>>('/admin/stores', req)
+  return data.data
+}
+
+export async function updateStore(id: number, req: CreateStoreRequest) {
+  const { data } = await http.put<ApiResult<AdminStoreDetailRow>>(`/admin/stores/${id}`, req)
+  return data.data
+}
+
+export async function deleteStore(id: number) {
+  const { data } = await http.delete<ApiResult<null>>(`/admin/stores/${id}`)
+  return data.data
+}
+
+export async function uploadStorePhoto(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { data } = await http.post<ApiResult<{ url: string }>>('/admin/stores/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
   return data.data
 }

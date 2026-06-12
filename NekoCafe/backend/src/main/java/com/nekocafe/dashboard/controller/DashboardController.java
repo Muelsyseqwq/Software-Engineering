@@ -15,7 +15,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/dashboard")
-@PreAuthorize("hasAnyRole('HQ_OPERATOR', 'ADMIN')")
+@PreAuthorize("hasRole('HQ_OPERATOR')")
 public class DashboardController {
 
     private final DashboardService dashboardService;
