@@ -111,6 +111,16 @@ public class StoreManagerController {
         return ApiResult.ok(storeManagerService.orders(principal.userId(), status, from, to));
     }
 
+    @GetMapping("/orders/dish-sales")
+    public ApiResult<ManagerDishSalesSummary> dishSales(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+        @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to
+    ) {
+        return ApiResult.ok(storeManagerService.dishSales(principal.userId(), status, from, to));
+    }
+
     @PutMapping("/orders/{id}/refund")
     public ApiResult<ManagerOrderRow> decideRefund(
         @AuthenticationPrincipal AuthPrincipal principal,

@@ -134,8 +134,8 @@
             <div class="card-header">
               <span>本店订单</span>
               <div class="reservation-filters">
-                <el-date-picker v-model="orderRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" size="small" style="width: 240px" @change="loadOrders" />
-                <el-select v-model="orderQuery.status" placeholder="订单状态" clearable size="small" style="width: 140px" @change="loadOrders">
+                <el-date-picker v-model="orderRange" type="daterange" value-format="YYYY-MM-DD" start-placeholder="开始" end-placeholder="结束" size="small" style="width: 240px" @change="loadOrderRevenueSection" />
+                <el-select v-model="orderQuery.status" placeholder="订单状态" clearable size="small" style="width: 140px" @change="loadOrderRevenueSection">
                   <el-option label="已创建" value="CREATED" />
                   <el-option label="已支付" value="PAID" />
                   <el-option label="制作中" value="PREPARING" />
@@ -145,6 +145,21 @@
               </div>
             </div>
           </template>
+          <div class="dish-sales-panel">
+            <div class="dish-sales-header">
+              <div>
+                <h3>菜品销量分布</h3>
+                <p>按当前订单筛选条件统计各菜品出售情况</p>
+              </div>
+              <div class="dish-sales-stats">
+                <span>总销量：<strong>{{ dishSales?.totalQuantity || 0 }}</strong></span>
+                <span>菜品数：<strong>{{ dishSales?.items.length || 0 }}</strong></span>
+                <span>销售额：<strong>¥{{ money(dishSales?.totalRevenue) }}</strong></span>
+              </div>
+            </div>
+            <div v-if="dishSales?.items.length" ref="dishSalesChartRef" class="dish-sales-chart"></div>
+            <el-empty v-else description="当前筛选条件下暂无菜品销量数据" />
+          </div>
           <el-table :data="orders" border empty-text="暂无订单数据">
             <el-table-column prop="orderNo" label="订单号" min-width="180" />
             <el-table-column prop="customerName" label="顾客" width="120" />
@@ -362,8 +377,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import * as echarts from 'echarts'
 import { useRoute, useRouter } from 'vue-router'
 import {
   createManagerShift,
@@ -375,6 +391,7 @@ import {
   fetchManagerCats,
   fetchManagerDishPriceHistory,
   fetchManagerDishes,
+  fetchManagerDishSales,
   fetchManagerMetrics,
   fetchManagerOrderDetail,
   fetchManagerOrders,
@@ -396,6 +413,7 @@ import {
   type ManagerActivityRow,
   type ManagerCatStatusRow,
   type ManagerDishRow,
+  type ManagerDishSalesSummary,
   type ManagerMetricsSummary,
   type ManagerOrderDetail,
   type ManagerOrderQuery,
@@ -432,6 +450,7 @@ const metrics = ref<ManagerMetricsSummary>()
 const tables = ref<ManagerTableRow[]>([])
 const reservations = ref<ManagerReservationRow[]>([])
 const orders = ref<ManagerOrderRow[]>([])
+const dishSales = ref<ManagerDishSalesSummary>()
 const orderDetail = ref<ManagerOrderDetail>()
 const cats = ref<ManagerCatStatusRow[]>([])
 const staffRows = ref<ManagerStaffRow[]>([])
@@ -461,6 +480,8 @@ const metricsRange = ref<string[]>([])
 const orderRange = ref<string[]>([])
 const shiftRange = ref<string[]>([])
 const leaveDates = ref<string[]>([])
+const dishSalesChartRef = ref<HTMLDivElement | null>(null)
+let dishSalesChart: echarts.ECharts | null = null
 
 const form = reactive<ManagerTableRow>({ tableNo: '', capacity: 2, area: '', status: 'AVAILABLE' })
 const storeForm = reactive<UpdateManagerStorePayload>({ name: '', city: '', address: '', phone: '', openingTime: '10:00', closingTime: '22:00', description: '' })
@@ -502,12 +523,18 @@ async function handleTabChange(name: string | number) {
 }
 
 async function loadTab(name: string) {
-  if (loadedTabs.has(name)) return
+  if (loadedTabs.has(name)) {
+    if (name === 'orders') {
+      await nextTick()
+      resizeDishSalesChart()
+    }
+    return
+  }
   loading.value = true
   try {
     if (name === 'overview') await loadData()
     if (name === 'tables') await Promise.all([loadTables(), loadReservations()])
-    if (name === 'orders') await loadOrders()
+    if (name === 'orders') await loadOrderRevenueSection()
     if (name === 'cats') await loadCats()
     if (name === 'staff') await Promise.all([loadStaff(), loadShifts()])
     if (name === 'activities') await loadActivities()
@@ -524,6 +551,12 @@ async function loadMetrics() { metrics.value = await fetchManagerMetrics(cleanMe
 async function loadTables() { tables.value = await fetchManagerTables() }
 async function loadReservations() { reservations.value = await fetchManagerReservations(cleanReservationQuery()) }
 async function loadOrders() { orders.value = await fetchManagerOrders(cleanOrderQuery()) }
+async function loadDishSales() {
+  dishSales.value = await fetchManagerDishSales(cleanOrderQuery())
+  await nextTick()
+  renderDishSalesChart()
+}
+async function loadOrderRevenueSection() { await Promise.all([loadOrders(), loadDishSales()]) }
 async function loadCats() { cats.value = await fetchManagerCats({ status: catQuery.status || undefined }) }
 async function loadStaff() { staffRows.value = await fetchManagerStaff() }
 async function loadShifts() { shifts.value = await fetchManagerShifts(cleanShiftQuery()) }
@@ -534,6 +567,46 @@ function cleanMetricsQuery() { return { from: metricsRange.value?.[0], to: metri
 function cleanReservationQuery() { return { status: reservationQuery.status || undefined, date: reservationQuery.date || undefined } }
 function cleanOrderQuery() { return { status: orderQuery.status || undefined, from: orderRange.value?.[0], to: orderRange.value?.[1] } }
 function cleanShiftQuery() { return { from: shiftRange.value?.[0], to: shiftRange.value?.[1] } }
+function renderDishSalesChart() {
+  if (!dishSales.value?.items.length || !dishSalesChartRef.value) {
+    disposeDishSalesChart()
+    return
+  }
+  if (!dishSalesChart) dishSalesChart = echarts.init(dishSalesChartRef.value)
+  const data = dishSales.value.items.map((item) => ({
+    name: item.dishName,
+    value: item.quantity,
+    revenue: item.revenue,
+    orderCount: item.orderCount
+  }))
+  dishSalesChart.setOption({
+    color: ['#f59e0b', '#fb923c', '#f97316', '#d97706', '#fbbf24', '#fdba74', '#ea580c', '#92400e'],
+    tooltip: {
+      trigger: 'item',
+      formatter: (params: any) => {
+        const item = params.data || {}
+        return `${params.name}<br/>销量：${params.value} 份<br/>订单数：${item.orderCount || 0}<br/>销售额：¥${money(item.revenue)}<br/>占比：${params.percent}%`
+      }
+    },
+    legend: { type: 'scroll', orient: 'vertical', right: 8, top: 20, bottom: 20 },
+    series: [{
+      name: '菜品销量',
+      type: 'pie',
+      radius: ['42%', '68%'],
+      center: ['38%', '50%'],
+      avoidLabelOverlap: true,
+      label: { formatter: '{b}\n{d}%' },
+      emphasis: { label: { show: true, fontSize: 16, fontWeight: 'bold' } },
+      data
+    }]
+  })
+  dishSalesChart.resize()
+}
+function disposeDishSalesChart() {
+  dishSalesChart?.dispose()
+  dishSalesChart = null
+}
+function resizeDishSalesChart() { dishSalesChart?.resize() }
 function orderReviewText(detail: ManagerOrderDetail) {
   if (!detail.reviewRating && !detail.reviewContent) return '暂无评价'
   const rating = detail.reviewRating ? `${detail.reviewRating} 星` : '未评分'
@@ -606,7 +679,7 @@ async function handleRefundDecision(row: ManagerOrderRow, decision: 'APPROVED' |
   try {
     await decideManagerRefund(row.id, { decision, remark })
     ElMessage.success(`已${actionText}退款申请`)
-    await Promise.all([loadOrders(), loadMetrics()])
+    await Promise.all([loadOrderRevenueSection(), loadMetrics()])
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '退款处理失败')
   } finally {
@@ -703,6 +776,12 @@ watch(
   },
   { immediate: true }
 )
+
+onMounted(() => window.addEventListener('resize', resizeDishSalesChart))
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeDishSalesChart)
+  disposeDishSalesChart()
+})
 </script>
 
 <style scoped>
@@ -718,13 +797,21 @@ watch(
 .metric-card { border: 1px solid #f3d7aa; border-radius: 14px; padding: 14px; background: #fffaf2; display: grid; gap: 8px; }
 .metric-card span { color: #8a5a1f; font-size: 13px; }
 .metric-card strong { font-size: 22px; color: #92400e; }
+.dish-sales-panel { display: grid; gap: 14px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid #f3d7aa; }
+.dish-sales-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.dish-sales-header h3 { margin: 0 0 6px; color: #92400e; }
+.dish-sales-header p { margin: 0; color: #8a5a1f; font-size: 13px; }
+.dish-sales-stats { display: flex; gap: 12px; flex-wrap: wrap; justify-content: flex-end; color: #8a5a1f; font-size: 13px; }
+.dish-sales-stats strong { color: #92400e; font-size: 16px; }
+.dish-sales-chart { width: 100%; height: 320px; }
 .form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .drawer-content { display: grid; gap: 10px; }
 .leave-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
 @media (max-width: 768px) {
-  .page-header, .card-header { flex-direction: column; }
+  .page-header, .card-header, .dish-sales-header { flex-direction: column; }
   .store-grid, .form-row, .metrics-grid { grid-template-columns: 1fr; }
-  .reservation-filters { justify-content: flex-start; }
+  .reservation-filters, .dish-sales-stats { justify-content: flex-start; }
+  .dish-sales-chart { height: 280px; }
 }
 </style>
