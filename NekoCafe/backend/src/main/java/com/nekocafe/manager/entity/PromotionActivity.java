@@ -14,6 +14,7 @@ public class PromotionActivity {
     private String title;
     private String type;
     private String description;
+    private Long rewardId;
     private String coverUrl;
     private LocalDateTime startAt;
     private LocalDateTime endAt;
@@ -31,6 +32,8 @@ public class PromotionActivity {
     public void setType(String type) { this.type = type; }
     public String getDescription() { return description; }
     public void setDescription(String description) { this.description = description; }
+    public Long getRewardId() { return rewardId; }
+    public void setRewardId(Long rewardId) { this.rewardId = rewardId; }
     public String getCoverUrl() { return coverUrl; }
     public void setCoverUrl(String coverUrl) { this.coverUrl = coverUrl; }
     public LocalDateTime getStartAt() { return startAt; }

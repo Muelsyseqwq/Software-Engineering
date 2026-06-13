@@ -58,4 +58,9 @@ public class ActivityController {
     public ApiResult<List<StoreAcceptanceRow>> storeAcceptance(@PathVariable Long id) {
         return ApiResult.ok(activityService.getStoreAcceptance(id));
     }
+
+    @GetMapping("/rewards")
+    public ApiResult<List<ActivityService.RewardOption>> rewardOptions() {
+        return ApiResult.ok(activityService.listRewardOptions());
+    }
 }

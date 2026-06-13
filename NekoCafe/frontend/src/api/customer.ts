@@ -64,6 +64,8 @@ export interface RewardRedemptionResponse {
   status: string
   redeemedAt: string
   usedAt?: string | null
+  sourceType?: string | null
+  sourceId?: number | null
 }
 
 export interface RedeemRewardResponse {

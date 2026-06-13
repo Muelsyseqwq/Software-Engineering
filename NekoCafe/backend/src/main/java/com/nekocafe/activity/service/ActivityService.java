@@ -6,6 +6,8 @@ import com.nekocafe.activity.entity.PromotionActivity;
 import com.nekocafe.activity.mapper.ActivityStoreMapper;
 import com.nekocafe.activity.mapper.PromotionActivityMapper;
 import com.nekocafe.common.exception.BizException;
+import com.nekocafe.customer.entity.RewardCatalog;
+import com.nekocafe.customer.mapper.RewardCatalogMapper;
 import com.nekocafe.store.entity.Store;
 import com.nekocafe.store.mapper.StoreMapper;
 import com.nekocafe.user.entity.User;
@@ -15,6 +17,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class ActivityService {
@@ -23,23 +30,27 @@ public class ActivityService {
     private final ActivityStoreMapper activityStoreMapper;
     private final StoreMapper storeMapper;
     private final UserMapper userMapper;
+    private final RewardCatalogMapper rewardCatalogMapper;
 
     public ActivityService(PromotionActivityMapper activityMapper,
                            ActivityStoreMapper activityStoreMapper,
                            StoreMapper storeMapper,
-                           UserMapper userMapper) {
+                           UserMapper userMapper,
+                           RewardCatalogMapper rewardCatalogMapper) {
         this.activityMapper = activityMapper;
         this.activityStoreMapper = activityStoreMapper;
         this.storeMapper = storeMapper;
         this.userMapper = userMapper;
+        this.rewardCatalogMapper = rewardCatalogMapper;
     }
 
     public List<ActivityRow> listActivities(String type, String status) {
-        return activityMapper.selectAllActivities(
-                        type != null && !type.isBlank() ? type : null,
-                        status != null && !status.isBlank() ? status : null)
-                .stream()
-                .map(this::toActivityRow)
+        List<PromotionActivity> activities = activityMapper.selectAllActivities(
+                type != null && !type.isBlank() ? type : null,
+                status != null && !status.isBlank() ? status : null);
+        Map<Long, String> rewardNameMap = buildRewardNameMap(activities);
+        return activities.stream()
+                .map(a -> toActivityRow(a, rewardNameMap))
                 .toList();
     }
 
@@ -49,13 +60,15 @@ public class ActivityService {
         activity.setTitle(request.title());
         activity.setType(request.type() != null ? request.type() : "PROMOTION");
         activity.setDescription(request.description());
+        activity.setRewardId(request.rewardId());
         activity.setCoverUrl(request.coverUrl());
         activity.setStartAt(request.startAt());
         activity.setEndAt(request.endAt());
         activity.setStatus("DRAFT");
         activity.setCreatedBy(request.createdBy());
         activityMapper.insert(activity);
-        return toActivityRow(activity);
+        String rewardName = resolveRewardName(request.rewardId());
+        return toActivityRow(activity, rewardName);
     }
 
     @Transactional
@@ -67,12 +80,14 @@ public class ActivityService {
         if (request.title() != null) activity.setTitle(request.title());
         if (request.type() != null) activity.setType(request.type());
         if (request.description() != null) activity.setDescription(request.description());
+        if (request.rewardId() != null) activity.setRewardId(request.rewardId());
         if (request.coverUrl() != null) activity.setCoverUrl(request.coverUrl());
         if (request.startAt() != null) activity.setStartAt(request.startAt());
         if (request.endAt() != null) activity.setEndAt(request.endAt());
         if (request.status() != null) activity.setStatus(request.status());
         activityMapper.updateById(activity);
-        return toActivityRow(activity);
+        String rewardName = resolveRewardName(activity.getRewardId());
+        return toActivityRow(activity, rewardName);
     }
 
     @Transactional
@@ -155,12 +170,39 @@ public class ActivityService {
         }).toList();
     }
 
-    private ActivityRow toActivityRow(PromotionActivity a) {
+    private ActivityRow toActivityRow(PromotionActivity a, Map<Long, String> rewardNameMap) {
+        String displayStatus = Integer.valueOf(1).equals(a.getDeleted()) ? "DELETED" : a.getStatus();
+        String rewardName = a.getRewardId() != null ? rewardNameMap.get(a.getRewardId()) : null;
+        return new ActivityRow(
+                a.getId(), a.getTitle(), a.getType(), a.getDescription(),
+                a.getCoverUrl(), a.getStartAt(), a.getEndAt(), displayStatus,
+                a.getCreatedBy(), a.getCreatedAt(), a.getUpdatedAt(),
+                a.getRewardId(), rewardName);
+    }
+
+    private ActivityRow toActivityRow(PromotionActivity a, String rewardName) {
         String displayStatus = Integer.valueOf(1).equals(a.getDeleted()) ? "DELETED" : a.getStatus();
         return new ActivityRow(
                 a.getId(), a.getTitle(), a.getType(), a.getDescription(),
                 a.getCoverUrl(), a.getStartAt(), a.getEndAt(), displayStatus,
-                a.getCreatedBy(), a.getCreatedAt(), a.getUpdatedAt());
+                a.getCreatedBy(), a.getCreatedAt(), a.getUpdatedAt(),
+                a.getRewardId(), rewardName);
+    }
+
+    private Map<Long, String> buildRewardNameMap(List<PromotionActivity> activities) {
+        Set<Long> rewardIds = activities.stream()
+                .map(PromotionActivity::getRewardId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        if (rewardIds.isEmpty()) return new java.util.HashMap<>();
+        return rewardCatalogMapper.selectBatchIds(rewardIds).stream()
+                .collect(Collectors.toMap(RewardCatalog::getId, RewardCatalog::getName, (a, b) -> a));
+    }
+
+    private String resolveRewardName(Long rewardId) {
+        if (rewardId == null) return null;
+        RewardCatalog reward = rewardCatalogMapper.selectById(rewardId);
+        return reward != null ? reward.getName() : null;
     }
 
     // --- DTOs ---
@@ -168,11 +210,24 @@ public class ActivityService {
     public record ActivityRow(Long id, String title, String type, String description,
                               String coverUrl, LocalDateTime startAt, LocalDateTime endAt,
                               String status, Long createdBy, LocalDateTime createdAt,
-                              LocalDateTime updatedAt) {}
+                              LocalDateTime updatedAt, Long rewardId, String rewardName) {}
 
     public record CreateActivityRequest(String title, String type, String description,
                                         String coverUrl, LocalDateTime startAt,
-                                        LocalDateTime endAt, String status, Long createdBy) {}
+                                        LocalDateTime endAt, String status, Long createdBy,
+                                        Long rewardId) {}
+
+    public record RewardOption(Long id, String name, String rewardType) {}
+
+    public List<RewardOption> listRewardOptions() {
+        return rewardCatalogMapper.selectList(new LambdaQueryWrapper<RewardCatalog>()
+                        .eq(RewardCatalog::getDeleted, 0)
+                        .eq(RewardCatalog::getStatus, "ACTIVE")
+                        .orderByAsc(RewardCatalog::getName))
+                .stream()
+                .map(r -> new RewardOption(r.getId(), r.getName(), r.getRewardType()))
+                .toList();
+    }
 
     public record StoreAcceptanceRow(Long id, Long storeId, String storeName,
                                      String acceptStatus, Long handledBy,

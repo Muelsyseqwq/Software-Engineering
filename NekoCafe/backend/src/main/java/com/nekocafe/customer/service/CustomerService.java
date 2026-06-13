@@ -544,7 +544,9 @@ public class CustomerService {
             redemption.getPointsCost(),
             redemption.getStatus(),
             redemption.getRedeemedAt(),
-            redemption.getUsedAt()
+            redemption.getUsedAt(),
+            redemption.getSourceType(),
+            redemption.getSourceId()
         );
     }
 
@@ -667,7 +669,9 @@ public class CustomerService {
         Integer pointsCost,
         String status,
         LocalDateTime redeemedAt,
-        LocalDateTime usedAt
+        LocalDateTime usedAt,
+        String sourceType,
+        Long sourceId
     ) {}
 
     public record RedeemRewardResponse(RewardRedemptionResponse redemption, Integer balanceAfter, RewardCatalogResponse reward) {}
