@@ -106,6 +106,23 @@ export interface ManagerOrderDetail extends ManagerOrderRow {
   items: ManagerOrderItemRow[]
 }
 
+export interface ManagerDishSalesRow {
+  dishId?: number
+  dishName: string
+  quantity: number
+  orderCount: number
+  revenue: number
+}
+
+export interface ManagerDishSalesSummary {
+  storeId: number
+  from?: string
+  to?: string
+  totalQuantity: number
+  totalRevenue: number
+  items: ManagerDishSalesRow[]
+}
+
 export interface ManagerCatStatusRow {
   id: number
   name: string
@@ -289,6 +306,11 @@ export async function updateManagerReservationStatus(id: number, status: string)
 
 export async function fetchManagerOrders(params?: ManagerOrderQuery) {
   const { data } = await http.get<ApiResult<ManagerOrderRow[]>>('/manager/orders', { params })
+  return data.data
+}
+
+export async function fetchManagerDishSales(params?: ManagerOrderQuery) {
+  const { data } = await http.get<ApiResult<ManagerDishSalesSummary>>('/manager/orders/dish-sales', { params })
   return data.data
 }
 

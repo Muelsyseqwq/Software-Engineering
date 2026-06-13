@@ -48,6 +48,8 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -66,6 +68,7 @@ public class StoreManagerService {
     private static final Set<String> HIRE_ROLES = Set.of(STAFF, CAT_CARETAKER);
     private static final String OPEN = "OPEN";
     private static final String CLOSED = "CLOSED";
+    private static final String CREATED = "CREATED";
     private static final String PREPARING = "PREPARING";
     private static final String PAID = "PAID";
     private static final String APPLIED = "APPLIED";
@@ -382,6 +385,40 @@ public class StoreManagerService {
             .orderByDesc(FoodOrder::getCreatedAt)
             .orderByDesc(FoodOrder::getId);
         return toOrderRows(foodOrderMapper.selectList(wrapper));
+    }
+
+    public ManagerDishSalesSummary dishSales(Long managerUserId, String status, LocalDate from, LocalDate to) {
+        Long storeId = resolveManagedStoreId(managerUserId);
+        String normalizedStatus = normalizeOptional(status);
+        LambdaQueryWrapper<FoodOrder> wrapper = orderQuery(storeId, status, from, to);
+        if (normalizedStatus == null) {
+            wrapper.notIn(FoodOrder::getStatus, List.of(CREATED, CANCELLED));
+        }
+        List<FoodOrder> orders = foodOrderMapper.selectList(wrapper);
+        if (orders.isEmpty()) {
+            return new ManagerDishSalesSummary(storeId, from, to, 0L, BigDecimal.ZERO, List.of());
+        }
+
+        List<FoodOrderItem> items = foodOrderItemMapper.selectList(new LambdaQueryWrapper<FoodOrderItem>()
+            .in(FoodOrderItem::getOrderId, orders.stream().map(FoodOrder::getId).toList()));
+        Map<DishSalesKey, DishSalesAccumulator> salesMap = new HashMap<>();
+        for (FoodOrderItem item : items) {
+            String dishName = item.getDishName() == null || item.getDishName().isBlank() ? "未命名菜品" : item.getDishName();
+            DishSalesKey key = new DishSalesKey(item.getDishId(), dishName);
+            salesMap.computeIfAbsent(key, ignored -> new DishSalesAccumulator(item.getDishId(), dishName)).add(item);
+        }
+
+        List<ManagerDishSalesRow> rows = salesMap.values().stream()
+            .map(DishSalesAccumulator::toRow)
+            .sorted(Comparator.comparing(ManagerDishSalesRow::quantity).reversed()
+                .thenComparing(Comparator.comparing(ManagerDishSalesRow::revenue).reversed())
+                .thenComparing(ManagerDishSalesRow::dishName))
+            .toList();
+        long totalQuantity = rows.stream().mapToLong(ManagerDishSalesRow::quantity).sum();
+        BigDecimal totalRevenue = rows.stream()
+            .map(ManagerDishSalesRow::revenue)
+            .reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new ManagerDishSalesSummary(storeId, from, to, totalQuantity, totalRevenue, rows);
     }
 
     @Transactional
@@ -873,6 +910,34 @@ public class StoreManagerService {
                 user == null ? null : user.getNickname(), shift.getRoleCode(), shift.getShiftDate(), shift.getStartTime(),
                 shift.getEndTime(), shift.getStatus(), shift.getRemark());
         }).toList();
+    }
+
+    private record DishSalesKey(Long dishId, String dishName) {
+    }
+
+    private static class DishSalesAccumulator {
+        private final Long dishId;
+        private final String dishName;
+        private long quantity;
+        private BigDecimal revenue = BigDecimal.ZERO;
+        private final Set<Long> orderIds = new HashSet<>();
+
+        private DishSalesAccumulator(Long dishId, String dishName) {
+            this.dishId = dishId;
+            this.dishName = dishName;
+        }
+
+        private void add(FoodOrderItem item) {
+            quantity += item.getQuantity() == null ? 0L : item.getQuantity();
+            revenue = revenue.add(item.getSubtotal() == null ? BigDecimal.ZERO : item.getSubtotal());
+            if (item.getOrderId() != null) {
+                orderIds.add(item.getOrderId());
+            }
+        }
+
+        private ManagerDishSalesRow toRow() {
+            return new ManagerDishSalesRow(dishId, dishName, quantity, (long) orderIds.size(), revenue);
+        }
     }
 
     private <T> Map<Long, T> selectByIds(Collection<Long> ids, Function<Collection<Long>, List<T>> selector, Function<T, Long> idGetter) {
