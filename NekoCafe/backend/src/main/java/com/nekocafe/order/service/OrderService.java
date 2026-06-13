@@ -96,6 +96,16 @@ public class OrderService {
         }
 
         validateReservationCanBeUsedForOrder(reservation);
+        if (reservation != null) {
+            long existingCreatedCount = orderMapper.selectCount(new LambdaQueryWrapper<FoodOrder>()
+                .eq(FoodOrder::getUserId, userId)
+                .eq(FoodOrder::getReservationId, reservation.getId())
+                .eq(FoodOrder::getDeleted, 0)
+                .eq(FoodOrder::getStatus, CREATED));
+            if (existingCreatedCount > 0) {
+                throw new BizException(3012, "该预约已有一笔待支付订单，请先完成支付或取消后再下单");
+            }
+        }
 
         List<Long> dishIds = request.items().stream().map(CreateOrderItemRequest::dishId).distinct().toList();
         Map<Long, Dish> dishMap = dishMapper.selectBatchIds(dishIds).stream()
