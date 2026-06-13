@@ -8,7 +8,6 @@
       </div>
       <div class="header-actions">
         <el-button :loading="locating" @click="loadNearbyByCurrentLocation">📍 距我最近</el-button>
-        <el-button @click="loadNearbyByDemoLocation">演示位置推荐</el-button>
         <el-button type="primary" :loading="loading" @click="loadStores">刷新门店</el-button>
       </div>
     </header>
