@@ -38,6 +38,14 @@ public class StorePhotoStorageService {
 
     public record UploadResult(String url) {}
 
+    public Path uploadDir() {
+        return uploadDir;
+    }
+
+    public String urlPattern() {
+        return urlPrefix + "/**";
+    }
+
     public UploadResult store(MultipartFile file) {
         if (file == null || file.isEmpty()) {
             throw new BizException(4301, "请选择要上传的门店封面图");
