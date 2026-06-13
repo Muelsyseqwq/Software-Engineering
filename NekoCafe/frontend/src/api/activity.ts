@@ -83,3 +83,19 @@ export async function fetchActivityRewards() {
   const { data } = await http.get<ApiResult<RewardOption[]>>('/activity/rewards')
   return data.data
 }
+
+export interface CreateRewardRequest {
+  name: string
+  description?: string
+  discountAmount?: number
+  pointsCost?: number
+  stock?: number
+  validFrom?: string
+  validTo?: string
+  coverUrl?: string
+}
+
+export async function createActivityReward(request: CreateRewardRequest) {
+  const { data } = await http.post<ApiResult<RewardOption>>('/activity/rewards', request)
+  return data.data
+}

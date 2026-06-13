@@ -63,4 +63,10 @@ public class ActivityController {
     public ApiResult<List<ActivityService.RewardOption>> rewardOptions() {
         return ApiResult.ok(activityService.listRewardOptions());
     }
+
+    @PostMapping("/rewards")
+    public ApiResult<ActivityService.RewardOption> createReward(
+            @RequestBody ActivityService.CreateRewardRequest request) {
+        return ApiResult.ok(activityService.createReward(request));
+    }
 }
