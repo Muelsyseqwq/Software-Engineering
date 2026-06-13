@@ -385,7 +385,8 @@ public class CustomerService {
         if (existing > 0) {
             return;
         }
-        BigDecimal amount = order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount();
+        BigDecimal amount = order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount();
+        amount = amount == null ? BigDecimal.ZERO : amount;
         int earned = amount.toBigInteger().intValue();
         if (earned <= 0) {
             return;
@@ -523,6 +524,7 @@ public class CustomerService {
             reward.getName(),
             reward.getDescription(),
             reward.getPointsCost(),
+            reward.getDiscountAmount(),
             reward.getRewardType(),
             reward.getCoverUrl(),
             reward.getStock(),
@@ -537,6 +539,7 @@ public class CustomerService {
             redemption.getId(),
             redemption.getRedemptionNo(),
             redemption.getRewardId(),
+            redemption.getOrderId(),
             redemption.getRewardName(),
             redemption.getPointsCost(),
             redemption.getStatus(),
@@ -646,6 +649,7 @@ public class CustomerService {
         String name,
         String description,
         Integer pointsCost,
+        BigDecimal discountAmount,
         String rewardType,
         String coverUrl,
         Integer stock,
@@ -658,6 +662,7 @@ public class CustomerService {
         Long id,
         String redemptionNo,
         Long rewardId,
+        Long orderId,
         String rewardName,
         Integer pointsCost,
         String status,

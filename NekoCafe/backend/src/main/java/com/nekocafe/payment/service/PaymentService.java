@@ -3,6 +3,7 @@ package com.nekocafe.payment.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nekocafe.common.exception.BizException;
 import com.nekocafe.customer.service.CustomerService;
+import com.nekocafe.customer.service.RewardRedemptionService;
 import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.service.OrderService;
 import com.nekocafe.payment.entity.PaymentRecord;
@@ -24,11 +25,18 @@ public class PaymentService {
     private final PaymentRecordMapper paymentRecordMapper;
     private final OrderService orderService;
     private final CustomerService customerService;
+    private final RewardRedemptionService rewardRedemptionService;
 
-    public PaymentService(PaymentRecordMapper paymentRecordMapper, OrderService orderService, CustomerService customerService) {
+    public PaymentService(
+        PaymentRecordMapper paymentRecordMapper,
+        OrderService orderService,
+        CustomerService customerService,
+        RewardRedemptionService rewardRedemptionService
+    ) {
         this.paymentRecordMapper = paymentRecordMapper;
         this.orderService = orderService;
         this.customerService = customerService;
+        this.rewardRedemptionService = rewardRedemptionService;
     }
 
     @Transactional
@@ -44,6 +52,7 @@ public class PaymentService {
                 .orderByDesc(PaymentRecord::getId)
                 .last("LIMIT 1"));
             if (existing != null) {
+                rewardRedemptionService.markUsedForPaidOrder(order);
                 customerService.awardPointsForPaidOrder(order);
                 return toResponse(existing);
             }
@@ -57,19 +66,22 @@ public class PaymentService {
             .eq(PaymentRecord::getIdempotencyKey, key)
             .last("LIMIT 1"));
         if (existingByKey != null) {
+            rewardRedemptionService.markUsedForPaidOrder(order);
             customerService.awardPointsForPaidOrder(order);
             return toResponse(existingByKey);
         }
 
+        BigDecimal payableAmount = order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount();
         PaymentRecord record = new PaymentRecord();
         record.setPaymentNo(generatePaymentNo(userId));
         record.setOrderId(order.getId());
         record.setIdempotencyKey(key);
-        record.setAmount(order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount());
+        record.setAmount(payableAmount == null ? BigDecimal.ZERO : payableAmount);
         record.setChannel(SANDBOX);
         record.setStatus(SUCCESS);
         record.setPaidAt(LocalDateTime.now());
         paymentRecordMapper.insert(record);
+        rewardRedemptionService.markUsedForPaidOrder(order);
         orderService.markPaid(order);
         customerService.awardPointsForPaidOrder(order);
         return toResponse(record);

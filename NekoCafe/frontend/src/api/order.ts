@@ -11,6 +11,7 @@ export interface CreateOrderRequest {
   reservationId?: number
   items: CreateOrderItemRequest[]
   remark?: string
+  rewardRedemptionId?: number
 }
 
 export type OrderStatus = 'CREATED' | 'PAID' | 'PREPARING' | 'COMPLETED' | 'CANCELLED'
@@ -34,6 +35,10 @@ export interface OrderResponse {
   tableNo?: string
   reservationId?: number
   totalAmount: number
+  rewardRedemptionId?: number
+  couponName?: string
+  couponDiscountAmount?: number
+  payableAmount?: number
   status: OrderStatus | string
   refundStatus?: RefundStatus | string
   remark?: string

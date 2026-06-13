@@ -15,6 +15,7 @@ public class RewardRedemption {
     private Long userId;
     private Long memberAccountId;
     private Long rewardId;
+    private Long orderId;
     private String rewardName;
     private Integer pointsCost;
     private String status;
@@ -34,6 +35,8 @@ public class RewardRedemption {
     public void setMemberAccountId(Long memberAccountId) { this.memberAccountId = memberAccountId; }
     public Long getRewardId() { return rewardId; }
     public void setRewardId(Long rewardId) { this.rewardId = rewardId; }
+    public Long getOrderId() { return orderId; }
+    public void setOrderId(Long orderId) { this.orderId = orderId; }
     public String getRewardName() { return rewardName; }
     public void setRewardName(String rewardName) { this.rewardName = rewardName; }
     public Integer getPointsCost() { return pointsCost; }

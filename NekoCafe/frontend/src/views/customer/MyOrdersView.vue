@@ -19,6 +19,14 @@
             <span v-if="order.paidAt">支付：{{ formatTime(order.paidAt) }}</span>
             <span v-if="order.completedAt">完成：{{ formatTime(order.completedAt) }}</span>
           </div>
+          <div v-if="refundByOrderId.get(order.id)" class="refund-detail">
+            <strong>{{ refundText(refundByOrderId.get(order.id)?.status || order.refundStatus || '') }}</strong>
+            <p>申请原因：{{ refundByOrderId.get(order.id)?.reason || '未填写' }}</p>
+            <p v-if="refundByOrderId.get(order.id)?.status === 'APPROVED'">同意理由：{{ refundByOrderId.get(order.id)?.reviewRemark || '审核人未填写说明' }}</p>
+            <p v-else-if="refundByOrderId.get(order.id)?.status === 'REJECTED'">驳回理由：{{ refundByOrderId.get(order.id)?.reviewRemark || '审核人未填写说明' }}</p>
+            <p v-else>审核说明：{{ refundByOrderId.get(order.id)?.reviewRemark || '审核中，请等待门店处理' }}</p>
+            <small v-if="refundByOrderId.get(order.id)?.reviewedAt">审核时间：{{ formatTime(refundByOrderId.get(order.id)?.reviewedAt) }}</small>
+          </div>
           <div class="neko-action-bar">
             <el-button v-if="order.canPay" type="primary" :loading="payingId === order.id" @click="pay(order)">继续支付</el-button>
             <el-button v-if="order.canRefund" type="warning" plain @click="openRefund(order)">申请退款</el-button>
@@ -43,27 +51,29 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { fetchMyOrders, type OrderResponse } from '@/api/order'
 import { sandboxPay } from '@/api/payment'
-import { applyRefund, createReview } from '@/api/customer'
+import { applyRefund, createReview, fetchMyRefunds, type RefundResponse } from '@/api/customer'
 
 const loading = ref(false)
 const submitting = ref(false)
 const payingId = ref<number>()
 const orders = ref<OrderResponse[]>([])
+const refunds = ref<RefundResponse[]>([])
 const selectedOrder = ref<OrderResponse>()
 const reviewDialog = ref(false)
 const refundDialog = ref(false)
 const refundReason = ref('')
 const reviewForm = reactive({ rating: 5, content: '' })
+const refundByOrderId = computed(() => new Map(refunds.value.map((refund) => [refund.orderId, refund])))
 
 function statusText(status: string) { return ({ CREATED: '待支付', PAID: '已支付，待制作', PREPARING: '制作中', COMPLETED: '已完成', CANCELLED: '已取消' } as Record<string, string>)[status] || status }
 function refundText(status: string) { return ({ APPLIED: '退款申请中', APPROVED: '退款已通过', REJECTED: '退款被驳回', REFUNDED: '已退款' } as Record<string, string>)[status] || status }
 function statusTag(status: string) { return ({ CREATED: 'warning', PAID: 'primary', PREPARING: 'warning', COMPLETED: 'success', CANCELLED: 'info' } as Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'>)[status] || 'info' }
 function formatTime(value?: string) { return value ? value.replace('T', ' ').slice(0, 16) : '-' }
-async function loadOrders() { loading.value = true; try { orders.value = await fetchMyOrders() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '订单加载失败') } finally { loading.value = false } }
+async function loadOrders() { loading.value = true; try { const [orderRows, refundRows] = await Promise.all([fetchMyOrders(), fetchMyRefunds()]); orders.value = orderRows; refunds.value = refundRows } catch (error) { ElMessage.error(error instanceof Error ? error.message : '订单加载失败') } finally { loading.value = false } }
 async function pay(order: OrderResponse) { payingId.value = order.id; try { await sandboxPay(order.id); ElMessage.success('支付成功，积分已更新'); await loadOrders() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '支付失败') } finally { payingId.value = undefined } }
 function openReview(order: OrderResponse) { selectedOrder.value = order; reviewForm.rating = 5; reviewForm.content = ''; reviewDialog.value = true }
 function openRefund(order: OrderResponse) { selectedOrder.value = order; refundReason.value = ''; refundDialog.value = true }
@@ -81,6 +91,9 @@ onMounted(loadOrders)
 .status-tags { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .items-line { margin: 16px 0; border-radius: 16px; padding: 12px 14px; background: rgba(255,240,220,0.7); color: #7c3f12; font-weight: 800; }
 .timeline { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
+.refund-detail { display: grid; gap: 6px; margin-top: 14px; border-radius: 16px; padding: 12px 14px; background: rgba(248, 113, 113, 0.08); color: #7f1d1d; }
+.refund-detail p { margin: 0; color: #8a4b42; line-height: 1.6; }
+.refund-detail small { color: #9f665f; }
 .dialog-input { margin-top: 18px; }
 @media (max-width: 700px) { .order-top { flex-direction: column; } .status-tags { justify-content: flex-start; } }
 </style>

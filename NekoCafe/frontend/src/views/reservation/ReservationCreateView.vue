@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">RESERVATION</p>
         <h1>创建猫咖预约</h1>
-        <p>选择门店、日期与时段，给今天的猫爪相遇留一个座位。</p>
+        <p>选择门店、今天起 7 天内的日期与时段，给猫爪相遇留一个座位。</p>
       </div>
       <el-button @click="router.push('/reservations/me')">我的预约</el-button>
     </header>
@@ -27,7 +27,7 @@
       <section class="slot-panel" v-loading="slotsLoading">
         <div class="section-title">
           <h2>可用时段</h2>
-          <span>按桌位容量自动筛选</span>
+          <span>按桌位容量自动筛选，可预约今天起 7 天内时段</span>
         </div>
         <div v-if="slots.length" class="slot-grid">
           <button
@@ -85,7 +85,7 @@ const submitting = ref(false)
 
 const form = reactive({
   storeId: undefined as number | undefined,
-  date: tomorrow(),
+  date: today(),
   partySize: 2,
   slotId: undefined as number | undefined,
   tableId: undefined as number | undefined,
@@ -106,16 +106,17 @@ const rules: FormRules<typeof form> = {
   ],
 }
 
-function tomorrow() {
+function today() {
   const date = new Date()
-  date.setDate(date.getDate() + 1)
   return date.toISOString().slice(0, 10)
 }
 
 function disabledDate(date: Date) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return date < today
+  const start = new Date()
+  start.setHours(0, 0, 0, 0)
+  const end = new Date(start)
+  end.setDate(start.getDate() + 6)
+  return date < start || date > end
 }
 
 function formatTime(value: string) {

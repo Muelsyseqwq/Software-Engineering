@@ -12,13 +12,15 @@
       </div>
     </header>
 
-    <el-alert class="summary-card" type="success" show-icon :closable="false">
-      <template #title>{{ feed?.summary || '正在为你生成智能推荐...' }}</template>
-      <template #default>
-        <span v-if="locationLabel">推荐已结合：{{ locationLabel }}</span>
-        <span v-else>未授权定位时，也会根据偏好、菜品、猫咪和活动数据生成推荐。</span>
-      </template>
-    </el-alert>
+    <el-tabs v-model="activeTab" class="recommendation-tabs">
+      <el-tab-pane label="推荐门店" name="stores">
+        <el-alert class="summary-card" type="success" show-icon :closable="false">
+          <template #title>{{ feed?.summary || '正在为你生成智能推荐...' }}</template>
+          <template #default>
+            <span v-if="locationLabel">推荐已结合：{{ locationLabel }}</span>
+            <span v-else>未授权定位时，也会根据偏好、菜品、猫咪和活动数据生成推荐。</span>
+          </template>
+        </el-alert>
 
     <div v-loading="loading" class="recommendation-grid">
       <el-card v-for="item in feed?.items || []" :key="item.storeId" class="recommendation-card" shadow="hover">
@@ -76,20 +78,73 @@
       </el-card>
     </div>
 
-    <el-empty v-if="!loading && (feed?.items.length || 0) === 0" description="暂时没有生成推荐，完善会员偏好后再试试" />
+        <el-empty v-if="!loading && (feed?.items.length || 0) === 0" description="暂时没有生成推荐，完善会员偏好后再试试" />
+      </el-tab-pane>
+      <el-tab-pane label="推荐猫咪" name="cats">
+        <el-alert class="summary-card" type="warning" show-icon :closable="false">
+          <template #title>{{ catFeed?.summary || '正在根据性格标签推荐猫咪...' }}</template>
+          <template #default>推荐会结合你的会员偏好、猫咪性格、互动建议和门店营业状态。</template>
+        </el-alert>
+        <div v-loading="catsLoading" class="recommendation-grid cat-grid">
+          <el-card v-for="cat in catFeed?.items || []" :key="cat.catId" class="recommendation-card cat-card" shadow="hover">
+            <template #header>
+              <div class="card-title">
+                <div>
+                  <p class="rank">TOP {{ cat.rank }}</p>
+                  <h2>{{ cat.catName }}</h2>
+                  <span>{{ cat.storeName }} · {{ cat.breed || '猫咖伙伴' }}</span>
+                </div>
+                <div class="score-box"><strong>{{ cat.score }}</strong><span>匹配分</span></div>
+              </div>
+            </template>
+            <div class="cat-profile">
+              <div v-if="cat.photoUrl" class="cat-photo"><img :src="cat.photoUrl" :alt="cat.catName" /></div>
+              <div v-else class="cat-photo placeholder">🐈</div>
+              <div class="cat-meta">
+                <el-tag v-for="tag in cat.tags" :key="tag" round>{{ tag }}</el-tag>
+                <el-tag type="success" round>{{ cat.status === 'AVAILABLE' ? '可互动' : cat.status }}</el-tag>
+              </div>
+            </div>
+            <div class="reason-block">
+              <h3>性格推荐理由</h3>
+              <ul><li v-for="reason in cat.reasons" :key="reason">{{ reason }}</li></ul>
+            </div>
+            <div class="highlight-grid cat-detail-grid">
+              <div class="highlight-section"><h3>性格标签</h3><p class="muted">{{ cat.personality || '暂无性格标签' }}</p></div>
+              <div class="highlight-section"><h3>互动建议</h3><p class="muted">{{ cat.interact || '暂无互动建议' }}</p></div>
+              <div class="highlight-section wide"><h3>健康状态</h3><p class="muted">{{ cat.healthStatus || '状态稳定' }}</p></div>
+            </div>
+            <div class="actions">
+              <el-button @click="router.push(`/stores/${cat.storeId}`)">查看门店</el-button>
+              <el-button type="primary" @click="router.push(`/reservations/new?storeId=${cat.storeId}`)">{{ cat.primaryActionText }}</el-button>
+            </div>
+          </el-card>
+        </div>
+        <el-empty v-if="!catsLoading && (catFeed?.items.length || 0) === 0" description="暂时没有匹配猫咪，完善会员偏好后再试试" />
+      </el-tab-pane>
+    </el-tabs>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { fetchCustomerRecommendations, type RecommendationFeedResponse, type RecommendationParams } from '@/api/recommendation'
+import {
+  fetchCustomerCatRecommendations,
+  fetchCustomerRecommendations,
+  type RecommendationCatFeedResponse,
+  type RecommendationFeedResponse,
+  type RecommendationParams,
+} from '@/api/recommendation'
 
 const router = useRouter()
 const loading = ref(false)
+const catsLoading = ref(false)
 const locating = ref(false)
+const activeTab = ref('stores')
 const feed = ref<RecommendationFeedResponse | null>(null)
+const catFeed = ref<RecommendationCatFeedResponse | null>(null)
 const locationLabel = ref('')
 const lastLocation = ref<RecommendationParams | null>(null)
 
@@ -105,6 +160,17 @@ async function loadRecommendations(params?: RecommendationParams) {
     ElMessage.error(error instanceof Error ? error.message : '智能推荐加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadCatRecommendations() {
+  catsLoading.value = true
+  try {
+    catFeed.value = await fetchCustomerCatRecommendations({ limit: 3 })
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '猫咪推荐加载失败')
+  } finally {
+    catsLoading.value = false
   }
 }
 
@@ -134,7 +200,16 @@ function loadWithCurrentLocation() {
   )
 }
 
-onMounted(() => loadRecommendations())
+watch(activeTab, (tab) => {
+  if (tab === 'cats' && !catFeed.value) {
+    void loadCatRecommendations()
+  }
+})
+
+onMounted(() => {
+  void loadRecommendations()
+  void loadCatRecommendations()
+})
 </script>
 
 <style scoped>
@@ -144,7 +219,8 @@ onMounted(() => loadRecommendations())
 .eyebrow { margin: 0 0 8px; color: #d97706; font-weight: 900; letter-spacing: 0.08em; }
 .page-header h1 { margin: 0 0 8px; color: #3b2618; }
 .page-header p { margin: 0; color: #7c5f4a; }
-.summary-card { border-radius: 14px; }
+.summary-card { border-radius: 14px; margin-bottom: 18px; }
+.recommendation-tabs { display: grid; gap: 16px; }
 .recommendation-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px; min-height: 180px; }
 .recommendation-card { border-radius: 20px; border-color: #f5dfc5; }
 .card-title { display: flex; justify-content: space-between; gap: 14px; align-items: flex-start; }
@@ -163,6 +239,11 @@ onMounted(() => loadRecommendations())
 .highlight-section.wide { grid-column: 1 / -1; }
 .highlight-pill { display: inline-flex; align-items: center; width: fit-content; max-width: 100%; padding: 6px 10px; border-radius: 999px; background: #fef3c7; color: #6b4d37; font-weight: 800; font-size: 13px; }
 .muted { margin: 0; color: #9a7a60; font-size: 13px; }
+.cat-profile { display: grid; grid-template-columns: 86px minmax(0, 1fr); gap: 14px; align-items: center; margin-bottom: 16px; }
+.cat-photo { width: 86px; height: 86px; border-radius: 24px; overflow: hidden; background: #fff7ed; display: grid; place-items: center; font-size: 36px; }
+.cat-photo img { width: 100%; height: 100%; object-fit: cover; }
+.cat-meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.cat-detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .actions { display: flex; justify-content: flex-end; gap: 10px; }
 @media (max-width: 720px) {
   .page-header { flex-direction: column; }
