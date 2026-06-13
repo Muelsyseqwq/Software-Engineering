@@ -83,6 +83,7 @@ export interface ManagerOrderRow {
   totalAmount: number
   status: string
   refundStatus?: string
+  refundReason?: string
   paidAt?: string
   completedAt?: string
   createdAt?: string

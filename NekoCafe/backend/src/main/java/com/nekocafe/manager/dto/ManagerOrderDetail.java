@@ -13,6 +13,7 @@ public record ManagerOrderDetail(
     BigDecimal totalAmount,
     String status,
     String refundStatus,
+    String refundReason,
     String remark,
     LocalDateTime paidAt,
     LocalDateTime completedAt,

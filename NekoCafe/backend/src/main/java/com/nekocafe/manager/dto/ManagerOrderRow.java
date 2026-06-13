@@ -12,6 +12,7 @@ public record ManagerOrderRow(
     BigDecimal totalAmount,
     String status,
     String refundStatus,
+    String refundReason,
     LocalDateTime paidAt,
     LocalDateTime completedAt,
     LocalDateTime createdAt,
