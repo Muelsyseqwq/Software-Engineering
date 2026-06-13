@@ -46,10 +46,19 @@ public class CustomerController {
 
     @GetMapping("/activities")
     public ApiResult<List<CustomerActivityResponse>> activities(
+        @AuthenticationPrincipal AuthPrincipal principal,
         @RequestParam(required = false) String type,
         @RequestParam(required = false) Long storeId
     ) {
-        return ApiResult.ok(customerService.activities(type, storeId));
+        return ApiResult.ok(customerService.activitiesForUser(principal.userId(), type, storeId));
+    }
+
+    @PostMapping("/activities/{activityId}/claim")
+    public ApiResult<RewardRedemptionResponse> claimActivityReward(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @PathVariable Long activityId
+    ) {
+        return ApiResult.ok(customerService.claimActivityReward(principal.userId(), activityId));
     }
 
     @GetMapping("/points")

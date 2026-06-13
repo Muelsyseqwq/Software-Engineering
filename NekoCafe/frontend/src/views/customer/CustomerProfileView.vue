@@ -35,10 +35,14 @@
           <div class="reward-body">
             <div class="reward-title"><h3>{{ reward.name }}</h3><el-tag effect="plain">{{ rewardTypeText(reward.rewardType) }}</el-tag></div>
             <p>{{ reward.description || '兑换后到店出示记录即可使用。' }}</p>
+            <el-tag size="small" :type="canRedeemByLevel(reward.requiredLevel) ? 'success' : 'warning'" class="level-tag">
+              {{ levelLabel(reward.requiredLevel) }}可兑
+            </el-tag>
             <div class="reward-meta"><strong>{{ reward.pointsCost }} 积分</strong><span>{{ stockText(reward.stock) }}</span></div>
             <el-button type="primary" round :disabled="!canRedeem(reward)" :loading="redeemingId === reward.id" @click="confirmRedeem(reward)">
               {{ redeemButtonText(reward) }}
             </el-button>
+            <span v-if="!canRedeemByLevel(reward.requiredLevel)" class="level-tip">需要{{ levelLabel(reward.requiredLevel) }}</span>
           </div>
         </article>
       </div>
@@ -101,8 +105,23 @@ function formatPoints(value: number) { return value >= 0 ? `+${value}` : String(
 function rewardIcon(type: string) { return ({ COUPON: '🎫', SERVICE: '🐾', ITEM: '☕' } as Record<string, string>)[type] || '🎁' }
 function rewardTypeText(type: string) { return ({ COUPON: '券包', SERVICE: '服务', ITEM: '实物' } as Record<string, string>)[type] || type }
 function stockText(stock?: number | null) { return stock == null ? '不限库存' : stock > 0 ? `剩余 ${stock} 份` : '已兑完' }
-function canRedeem(reward: RewardCatalogResponse) { return (points.value?.points ?? 0) >= reward.pointsCost && (reward.stock == null || reward.stock > 0) }
+function canRedeem(reward: RewardCatalogResponse) { return canRedeemByLevel(reward.requiredLevel) && (points.value?.points ?? 0) >= reward.pointsCost && (reward.stock == null || reward.stock > 0) }
+function normalizeLevel(level?: string | null) { return (level || 'NORMAL').toUpperCase() }
+function levelRank(level?: string | null) {
+  const normalized = normalizeLevel(level)
+  if (normalized === 'SVIP') return 3
+  if (normalized === 'VIP') return 2
+  return 1
+}
+function canRedeemByLevel(requiredLevel?: string | null) { return levelRank(points.value?.levelCode) >= levelRank(requiredLevel) }
+function levelLabel(level?: string | null) {
+  const normalized = normalizeLevel(level)
+  if (normalized === 'SVIP') return 'SVIP 会员'
+  if (normalized === 'VIP') return 'VIP 会员'
+  return '普通会员'
+}
 function redeemButtonText(reward: RewardCatalogResponse) {
+  if (!canRedeemByLevel(reward.requiredLevel)) return `需要 ${levelLabel(reward.requiredLevel)}`
   if (reward.stock != null && reward.stock <= 0) return '已兑完'
   if ((points.value?.points ?? 0) < reward.pointsCost) return '积分不足'
   return '立即兑换'
@@ -166,5 +185,7 @@ onMounted(loadData)
 .reward-meta strong { color: #d97706; }
 .points-plus { color: #16a34a; }
 .points-minus { color: #dc2626; }
+.level-tag { margin-top: 6px; }
+.level-tip { color: #d46b08; font-size: 13px; display: block; margin-top: 8px; }
 @media (max-width: 860px) { .profile-grid { grid-template-columns: 1fr; } }
 </style>

@@ -69,7 +69,7 @@ const refundReason = ref('')
 const reviewForm = reactive({ rating: 5, content: '' })
 const refundByOrderId = computed(() => new Map(refunds.value.map((refund) => [refund.orderId, refund])))
 
-function statusText(status: string) { return ({ CREATED: '待支付', PAID: '已支付，待制作', PREPARING: '制作中', COMPLETED: '已完成', CANCELLED: '已取消' } as Record<string, string>)[status] || status }
+function statusText(status: string) { return ({ CREATED: '待支付', PAID: '已支付', PREPARING: '制作中', COMPLETED: '已完成', CANCELLED: '已取消', REFUNDING: '退款中', REFUNDED: '已退款' } as Record<string, string>)[status] || status }
 function refundText(status: string) { return ({ APPLIED: '退款申请中', APPROVED: '退款已通过', REJECTED: '退款被驳回', REFUNDED: '已退款' } as Record<string, string>)[status] || status }
 function statusTag(status: string) { return ({ CREATED: 'warning', PAID: 'primary', PREPARING: 'warning', COMPLETED: 'success', CANCELLED: 'info' } as Record<string, 'success' | 'warning' | 'info' | 'primary' | 'danger'>)[status] || 'info' }
 function formatTime(value?: string) { return value ? value.replace('T', ' ').slice(0, 16) : '-' }

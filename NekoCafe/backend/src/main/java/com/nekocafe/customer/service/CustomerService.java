@@ -55,6 +55,12 @@ public class CustomerService {
     private static final String REDEEMED = "REDEEMED";
     private static final String PUBLISHED = "PUBLISHED";
     private static final String ACCEPTED = "ACCEPTED";
+    private static final String COUPON = "COUPON";
+    private static final String ACTIVITY = "ACTIVITY";
+    private static final String CLAIM_AVAILABLE = "AVAILABLE";
+    private static final String CLAIM_CLAIMED = "CLAIMED";
+    private static final String CLAIM_NO_REWARD = "NO_REWARD";
+    private static final String CLAIM_UNAVAILABLE = "UNAVAILABLE";
 
     private final ReviewMapper reviewMapper;
     private final RefundRequestMapper refundRequestMapper;
@@ -111,6 +117,10 @@ public class CustomerService {
     }
 
     public List<CustomerActivityResponse> activities(String type, Long storeId) {
+        return activitiesForUser(null, type, storeId);
+    }
+
+    public List<CustomerActivityResponse> activitiesForUser(Long userId, String type, Long storeId) {
         LambdaQueryWrapper<ActivityStore> mappingWrapper = new LambdaQueryWrapper<ActivityStore>()
             .eq(ActivityStore::getAcceptStatus, ACCEPTED)
             .orderByDesc(ActivityStore::getHandledAt)
@@ -148,7 +158,7 @@ public class CustomerService {
             : storeMapper.selectBatchIds(storeIds).stream().collect(Collectors.toMap(Store::getId, Function.identity(), (left, right) -> left));
 
         return activities.stream()
-            .map(activity -> toActivityResponse(activity, mappingsByActivity.getOrDefault(activity.getId(), List.of()), storeMap))
+            .map(activity -> toActivityResponse(activity, mappingsByActivity.getOrDefault(activity.getId(), List.of()), storeMap, userId))
             .toList();
     }
 
@@ -196,6 +206,7 @@ public class CustomerService {
         validateRewardAvailable(reward);
 
         MemberAccount account = loadOrCreateMemberAccount(userId);
+        validateMemberLevel(account, reward);
         int cost = reward.getPointsCost() == null ? 0 : reward.getPointsCost();
         if (cost <= 0) {
             throw new BizException(3342, "奖励积分配置异常");
@@ -353,7 +364,8 @@ public class CustomerService {
         refund.setRefundNo(generateRefundNo(userId));
         refund.setUserId(userId);
         refund.setOrderId(order.getId());
-        refund.setAmount(order.getTotalAmount() == null ? BigDecimal.ZERO : order.getTotalAmount());
+        BigDecimal refundAmount = order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount();
+        refund.setAmount(refundAmount == null ? BigDecimal.ZERO : refundAmount);
         refund.setReason(limitText(normalizeOptional(request == null ? null : request.reason()), 500));
         refund.setStatus(APPLIED);
         refundRequestMapper.insert(refund);
@@ -425,6 +437,29 @@ public class CustomerService {
         }
     }
 
+    private void validateMemberLevel(MemberAccount account, RewardCatalog reward) {
+        if (reward == null) {
+            return;
+        }
+        if (levelRank(account == null ? null : account.getLevelCode()) < levelRank(reward.getRequiredLevel())) {
+            throw new BizException(3345, "当前会员等级不足，暂不能兑换");
+        }
+    }
+
+    private String normalizeLevel(String level) {
+        String normalized = normalizeOptional(level);
+        return normalized == null ? "NORMAL" : normalized.toUpperCase();
+    }
+
+    private int levelRank(String level) {
+        String normalized = normalizeLevel(level);
+        return switch (normalized) {
+            case "SVIP" -> 3;
+            case "VIP" -> 2;
+            default -> 1;
+        };
+    }
+
     private HomeOrderStats buildOrderStats(List<OrderService.OrderResponse> orders) {
         long pendingPayment = orders.stream().filter(order -> "CREATED".equals(order.status())).count();
         long paid = orders.stream().filter(order -> PAID.equals(order.status())).count();
@@ -452,6 +487,10 @@ public class CustomerService {
     }
 
     private CustomerActivityResponse toActivityResponse(PromotionActivity activity, List<ActivityStore> mappings, Map<Long, Store> storeMap) {
+        return toActivityResponse(activity, mappings, storeMap, null);
+    }
+
+    private CustomerActivityResponse toActivityResponse(PromotionActivity activity, List<ActivityStore> mappings, Map<Long, Store> storeMap, Long userId) {
         List<ActivityStoreResponse> stores = mappings.stream()
             .map(mapping -> {
                 Store store = storeMap.get(mapping.getStoreId());
@@ -463,6 +502,8 @@ public class CustomerService {
                 );
             })
             .toList();
+        RewardCatalog reward = activity.getRewardId() == null ? null : rewardCatalogMapper.selectById(activity.getRewardId());
+        String claimStatus = resolveClaimStatus(activity, reward, userId);
         return new CustomerActivityResponse(
             activity.getId(),
             activity.getTitle(),
@@ -472,8 +513,105 @@ public class CustomerService {
             activity.getCoverUrl(),
             activity.getStartAt(),
             activity.getEndAt(),
+            reward == null ? null : reward.getId(),
+            reward == null ? null : reward.getName(),
+            reward == null ? null : reward.getRewardType(),
+            reward == null ? null : reward.getDiscountAmount(),
+            CLAIM_AVAILABLE.equals(claimStatus),
+            claimStatus,
             stores
         );
+    }
+
+    @Transactional
+    public RewardRedemptionResponse claimActivityReward(Long userId, Long activityId) {
+        ensureLogin(userId);
+        if (activityId == null) {
+            throw new BizException(3351, "请选择要领取优惠券的活动");
+        }
+        PromotionActivity activity = activityMapper.selectOne(new LambdaQueryWrapper<PromotionActivity>()
+            .eq(PromotionActivity::getId, activityId)
+            .eq(PromotionActivity::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (activity == null) {
+            throw new BizException(3352, "活动不存在");
+        }
+        validateActivityClaimable(activity);
+        RewardCatalog reward = rewardCatalogMapper.selectById(activity.getRewardId());
+        validateActivityCouponReward(reward);
+
+        long existing = rewardRedemptionMapper.selectCount(new LambdaQueryWrapper<RewardRedemption>()
+            .eq(RewardRedemption::getUserId, userId)
+            .eq(RewardRedemption::getRewardId, reward.getId())
+            .eq(RewardRedemption::getSourceType, ACTIVITY)
+            .eq(RewardRedemption::getSourceId, activity.getId())
+            .eq(RewardRedemption::getDeleted, 0));
+        if (existing > 0) {
+            throw new BizException(3355, "已领取该活动优惠券");
+        }
+
+        MemberAccount account = loadOrCreateMemberAccount(userId);
+        RewardRedemption redemption = new RewardRedemption();
+        redemption.setRedemptionNo(generateRedemptionNo(userId));
+        redemption.setUserId(userId);
+        redemption.setMemberAccountId(account.getId());
+        redemption.setRewardId(reward.getId());
+        redemption.setRewardName(reward.getName());
+        redemption.setPointsCost(0);
+        redemption.setSourceType(ACTIVITY);
+        redemption.setSourceId(activity.getId());
+        redemption.setStatus(REDEEMED);
+        redemption.setRedeemedAt(LocalDateTime.now());
+        redemption.setDeleted(0);
+        rewardRedemptionMapper.insert(redemption);
+        return toRedemptionResponse(redemption);
+    }
+
+    private void validateActivityClaimable(PromotionActivity activity) {
+        if (!PUBLISHED.equals(activity.getStatus())) {
+            throw new BizException(3353, "活动暂未发布");
+        }
+        LocalDateTime now = LocalDateTime.now();
+        if (activity.getStartAt() != null && activity.getStartAt().isAfter(now)) {
+            throw new BizException(3353, "活动还未开始");
+        }
+        if (activity.getEndAt() != null && activity.getEndAt().isBefore(now)) {
+            throw new BizException(3353, "活动已结束");
+        }
+        if (activity.getRewardId() == null) {
+            throw new BizException(3354, "该活动暂无可领取优惠券");
+        }
+    }
+
+    private void validateActivityCouponReward(RewardCatalog reward) {
+        validateRewardAvailable(reward);
+        if (!COUPON.equals(reward.getRewardType())) {
+            throw new BizException(3354, "该活动暂无可领取优惠券");
+        }
+    }
+
+    private String resolveClaimStatus(PromotionActivity activity, RewardCatalog reward, Long userId) {
+        if (reward == null || activity.getRewardId() == null) {
+            return CLAIM_NO_REWARD;
+        }
+        try {
+            validateActivityClaimable(activity);
+            validateActivityCouponReward(reward);
+        } catch (BizException ex) {
+            return CLAIM_UNAVAILABLE;
+        }
+        if (userId != null) {
+            long existing = rewardRedemptionMapper.selectCount(new LambdaQueryWrapper<RewardRedemption>()
+                .eq(RewardRedemption::getUserId, userId)
+                .eq(RewardRedemption::getRewardId, reward.getId())
+                .eq(RewardRedemption::getSourceType, ACTIVITY)
+                .eq(RewardRedemption::getSourceId, activity.getId())
+                .eq(RewardRedemption::getDeleted, 0));
+            if (existing > 0) {
+                return CLAIM_CLAIMED;
+            }
+        }
+        return CLAIM_AVAILABLE;
     }
 
     private String activityTypeText(String type) {
@@ -526,6 +664,7 @@ public class CustomerService {
             reward.getPointsCost(),
             reward.getDiscountAmount(),
             reward.getRewardType(),
+            normalizeLevel(reward.getRequiredLevel()),
             reward.getCoverUrl(),
             reward.getStock(),
             reward.getStatus(),
@@ -631,6 +770,12 @@ public class CustomerService {
         String coverUrl,
         LocalDateTime startAt,
         LocalDateTime endAt,
+        Long rewardId,
+        String rewardName,
+        String rewardType,
+        BigDecimal discountAmount,
+        Boolean claimable,
+        String claimStatus,
         List<ActivityStoreResponse> stores
     ) {}
 
@@ -653,6 +798,7 @@ public class CustomerService {
         Integer pointsCost,
         BigDecimal discountAmount,
         String rewardType,
+        String requiredLevel,
         String coverUrl,
         Integer stock,
         String status,

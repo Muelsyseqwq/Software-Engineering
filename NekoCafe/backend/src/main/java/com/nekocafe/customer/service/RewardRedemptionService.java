@@ -134,4 +134,18 @@ public class RewardRedemptionService {
 
     public record CouponUsage(Long redemptionId, String rewardName, BigDecimal discountAmount) {
     }
+
+    public void releaseLockedForOrder(FoodOrder order) {
+        if (order == null || order.getRewardRedemptionId() == null) {
+            return;
+        }
+        rewardRedemptionMapper.update(null, new LambdaUpdateWrapper<RewardRedemption>()
+            .eq(RewardRedemption::getId, order.getRewardRedemptionId())
+            .eq(RewardRedemption::getUserId, order.getUserId())
+            .eq(RewardRedemption::getOrderId, order.getId())
+            .eq(RewardRedemption::getStatus, LOCKED)
+            .isNull(RewardRedemption::getUsedAt)
+            .set(RewardRedemption::getStatus, REDEEMED)
+            .set(RewardRedemption::getOrderId, null));
+    }
 }

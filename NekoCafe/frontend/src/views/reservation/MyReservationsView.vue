@@ -66,11 +66,10 @@ function formatTime(value: string) {
 function statusText(status: string) {
   const map: Record<string, string> = {
     RESERVED: '已预约',
-    CONFIRMED: '已确认',
-    PENDING_PAYMENT: '待支付',
-    CANCELLED: '已取消',
-    CHECKED_IN: '已到店',
+    CHECKED_IN: '已签到',
     COMPLETED: '已完成',
+    CANCELLED: '已取消',
+    NO_SHOW: '未到店',
   }
   return map[status] || status
 }
@@ -86,7 +85,7 @@ function canCancel(status: string) {
 }
 
 function canOrder(status: string) {
-  return ['RESERVED', 'CONFIRMED', 'PENDING_PAYMENT', 'CHECKED_IN'].includes(status)
+  return ['RESERVED', 'CHECKED_IN'].includes(status)
 }
 
 function goCheckout(row: ReservationRow) {
@@ -106,7 +105,7 @@ async function loadReservations() {
 
 async function handleCancel(id: number) {
   try {
-    await ElMessageBox.confirm('确定取消这条预约吗？取消后该时段会重新释放。', '取消预约', { type: 'warning' })
+    await ElMessageBox.confirm('确认取消该预约吗？若该预约有关联的未支付订单，系统会一并取消；如已有已支付订单，将无法取消。', '取消预约', { type: 'warning' })
     cancellingId.value = id
     await cancelReservation(id)
     ElMessage.success('预约已取消')

@@ -11,6 +11,7 @@ import com.nekocafe.store.entity.DiningTable;
 import com.nekocafe.store.entity.Store;
 import com.nekocafe.store.mapper.DiningTableMapper;
 import com.nekocafe.store.mapper.StoreMapper;
+import com.nekocafe.order.service.OrderService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,19 +37,22 @@ public class ReservationService {
     private final StoreMapper storeMapper;
     private final DiningTableMapper diningTableMapper;
     private final ReservationSlotGenerator slotGenerator;
+    private final OrderService orderService;
 
     public ReservationService(
         ReservationSlotMapper slotMapper,
         ReservationMapper reservationMapper,
         StoreMapper storeMapper,
         DiningTableMapper diningTableMapper,
-        ReservationSlotGenerator slotGenerator
+        ReservationSlotGenerator slotGenerator,
+        OrderService orderService
     ) {
         this.slotMapper = slotMapper;
         this.reservationMapper = reservationMapper;
         this.storeMapper = storeMapper;
         this.diningTableMapper = diningTableMapper;
         this.slotGenerator = slotGenerator;
+        this.orderService = orderService;
     }
 
     public List<ReservationSlotResponse> slots(Long storeId, LocalDate date, Integer partySize) {
@@ -168,7 +172,12 @@ public class ReservationService {
         if (CANCELLED.equals(reservation.getStatus()) || "CHECKED_IN".equals(reservation.getStatus()) || "COMPLETED".equals(reservation.getStatus())) {
             throw new BizException(2107, "当前预约状态不可取消");
         }
+        if (orderService.hasPaidOrActiveOrdersForReservation(userId, reservation.getId())) {
+            throw new BizException(2112, "预约已有已支付订单，请先处理订单");
+        }
+        orderService.cancelCreatedOrdersForReservation(userId, reservation.getId());
         reservation.setStatus(CANCELLED);
+        reservation.setCancelledAt(LocalDateTime.now());
         reservationMapper.updateById(reservation);
         slotMapper.update(null, new LambdaUpdateWrapper<ReservationSlot>()
             .eq(ReservationSlot::getId, reservation.getSlotId())
