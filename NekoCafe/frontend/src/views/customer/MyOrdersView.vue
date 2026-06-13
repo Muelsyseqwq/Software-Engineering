@@ -38,7 +38,7 @@
       </div>
     </section>
 
-    <el-dialog v-model="reviewDialog" title="评价订单" width="420px">
+    <el-dialog v-model="reviewDialog" title="评价订单" width="420px" append-to-body :lock-scroll="false" align-center>
       <el-rate v-model="reviewForm.rating" size="large" />
       <el-input v-model="reviewForm.content" type="textarea" :rows="4" maxlength="300" show-word-limit placeholder="分享这次猫咖体验" class="dialog-input" />
       <template #footer><el-button @click="reviewDialog = false">取消</el-button><el-button type="primary" :loading="submitting" @click="submitReview">提交评价</el-button></template>

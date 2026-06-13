@@ -360,7 +360,7 @@
       <template #footer><el-button @click="priceDialogVisible = false">取消</el-button><el-button type="primary" @click="handlePriceSubmit">保存</el-button></template>
     </el-dialog>
 
-    <el-drawer v-model="orderDrawerVisible" title="订单详情" size="520px">
+    <el-drawer v-model="orderDrawerVisible" title="订单详情" size="520px" class="order-detail-drawer" append-to-body :lock-scroll="false">
       <div v-if="orderDetail" class="drawer-content">
         <p><strong>订单号：</strong>{{ orderDetail.orderNo }}</p>
         <p><strong>顾客：</strong>{{ orderDetail.customerName || '散客' }}</p>
@@ -809,7 +809,8 @@ onBeforeUnmount(() => {
 .dish-sales-stats strong { color: #92400e; font-size: 16px; }
 .dish-sales-chart { width: 100%; height: 320px; }
 .form-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.drawer-content { display: grid; gap: 10px; }
+:deep(.order-detail-drawer .el-drawer__body) { overflow-y: auto; }
+.drawer-content { display: grid; gap: 10px; padding-bottom: 24px; }
 .leave-info { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 
 @media (max-width: 768px) {
