@@ -65,6 +65,15 @@
       </el-col>
     </el-row>
 
+    <!-- charts row 3: 门店营收占比 -->
+    <el-row :gutter="16" class="chart-row">
+      <el-col :span="24">
+        <el-card header="各门店营收占比">
+          <div ref="storePieChartRef" class="chart-box" />
+        </el-card>
+      </el-col>
+    </el-row>
+
     <!-- cross-store comparison -->
     <el-card header="跨门店对比分析" class="cross-store-card">
       <el-table :data="crossStoreData" border stripe v-loading="crossLoading" empty-text="暂无数据">
@@ -136,11 +145,13 @@ const revenueChartRef = ref<HTMLDivElement | null>(null)
 const perSqmChartRef = ref<HTMLDivElement | null>(null)
 const turnoverChartRef = ref<HTMLDivElement | null>(null)
 const repurchaseChartRef = ref<HTMLDivElement | null>(null)
+const storePieChartRef = ref<HTMLDivElement | null>(null)
 
 let revenueChart: echarts.ECharts | null = null
 let perSqmChart: echarts.ECharts | null = null
 let turnoverChart: echarts.ECharts | null = null
 let repurchaseChart: echarts.ECharts | null = null
+let storePieChart: echarts.ECharts | null = null
 
 const periodLabel = computed(() => {
   if (overview.value) {
@@ -198,6 +209,8 @@ async function loadCrossStore() {
   crossLoading.value = true
   try {
     crossStoreData.value = await fetchCrossStore(period.value)
+    await nextTick()
+    renderStorePieChart(crossStoreData.value)
   } catch (e) {
     ElMessage.warning(e instanceof Error ? e.message : '加载跨门店数据失败')
   } finally {
@@ -296,11 +309,44 @@ function renderRepurchaseChart(data: DashboardTrendPoint[]) {
   }
 }
 
+function renderStorePieChart(data: CrossStoreRow[]) {
+  storePieChart = initChart(storePieChartRef.value, storePieChart)
+  if (!storePieChart) return
+  if (!data || data.length === 0) {
+    storePieChart.setOption({
+      title: { text: '暂无数据', left: 'center', top: 'center', textStyle: { color: '#999', fontSize: 14 } },
+    })
+    return
+  }
+  const colors = ['#d97706', '#f59e0b', '#6f945d', '#9a3412', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1']
+  storePieChart.setOption({
+    tooltip: { trigger: 'item', formatter: '{b}: ¥{c} ({d}%)' },
+    legend: { bottom: 0, type: 'scroll' },
+    series: [{
+      type: 'pie',
+      radius: ['30%', '65%'],
+      center: ['50%', '48%'],
+      itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+      label: { formatter: '{b}\n{d}%' },
+      data: data.map((row, i) => ({
+        name: row.storeName,
+        value: row.revenue,
+        itemStyle: { color: colors[i % colors.length] },
+      })),
+      emphasis: {
+        label: { fontSize: 16, fontWeight: 'bold' },
+        itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.3)' },
+      },
+    }],
+  })
+}
+
 function resizeCharts() {
   revenueChart?.resize()
   perSqmChart?.resize()
   turnoverChart?.resize()
   repurchaseChart?.resize()
+  storePieChart?.resize()
 }
 
 function disposeCharts() {
@@ -308,10 +354,12 @@ function disposeCharts() {
   perSqmChart?.dispose()
   turnoverChart?.dispose()
   repurchaseChart?.dispose()
+  storePieChart?.dispose()
   revenueChart = null
   perSqmChart = null
   turnoverChart = null
   repurchaseChart = null
+  storePieChart = null
 }
 
 // ---- event handlers ----

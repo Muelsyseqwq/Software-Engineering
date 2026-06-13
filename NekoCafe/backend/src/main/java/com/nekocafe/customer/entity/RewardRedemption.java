@@ -18,6 +18,8 @@ public class RewardRedemption {
     private Long orderId;
     private String rewardName;
     private Integer pointsCost;
+    private String sourceType;
+    private Long sourceId;
     private String status;
     private LocalDateTime redeemedAt;
     private LocalDateTime usedAt;
@@ -41,6 +43,10 @@ public class RewardRedemption {
     public void setRewardName(String rewardName) { this.rewardName = rewardName; }
     public Integer getPointsCost() { return pointsCost; }
     public void setPointsCost(Integer pointsCost) { this.pointsCost = pointsCost; }
+    public String getSourceType() { return sourceType; }
+    public void setSourceType(String sourceType) { this.sourceType = sourceType; }
+    public Long getSourceId() { return sourceId; }
+    public void setSourceId(Long sourceId) { this.sourceId = sourceId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public LocalDateTime getRedeemedAt() { return redeemedAt; }

@@ -13,6 +13,8 @@ export interface ActivityRow {
   createdBy?: number
   createdAt: string
   updatedAt: string
+  rewardId?: number
+  rewardName?: string
 }
 
 export interface CreateActivityRequest {
@@ -24,6 +26,7 @@ export interface CreateActivityRequest {
   endAt?: string
   status?: string
   createdBy?: number
+  rewardId?: number
 }
 
 export interface StoreAcceptanceRow {
@@ -67,5 +70,16 @@ export async function publishActivity(id: number, storeIds: number[]) {
 
 export async function fetchActivityStores(id: number) {
   const { data } = await http.get<ApiResult<StoreAcceptanceRow[]>>(`/activity/${id}/stores`)
+  return data.data
+}
+
+export interface RewardOption {
+  id: number
+  name: string
+  rewardType: string
+}
+
+export async function fetchActivityRewards() {
+  const { data } = await http.get<ApiResult<RewardOption[]>>('/activity/rewards')
   return data.data
 }

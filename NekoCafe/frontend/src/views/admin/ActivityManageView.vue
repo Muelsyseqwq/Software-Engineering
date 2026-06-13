@@ -31,6 +31,9 @@
       <el-table-column label="类型" width="100">
         <template #default="{ row }">{{ typeLabel(row.type) }}</template>
       </el-table-column>
+      <el-table-column prop="rewardName" label="优惠券" min-width="120">
+        <template #default="{ row }">{{ row.rewardName || '-' }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
           <el-tag :type="statusTagType(row.status)">{{ statusLabel(row.status) }}</el-tag>
@@ -67,6 +70,11 @@
         </el-form-item>
         <el-form-item label="活动描述">
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="活动详细描述" />
+        </el-form-item>
+        <el-form-item label="发放优惠券">
+          <el-select v-model="form.rewardId" placeholder="选择要发放的优惠券（可选）" clearable style="width:100%">
+            <el-option v-for="r in rewards" :key="r.id" :label="`${r.name}（${r.rewardType === 'COUPON' ? '优惠券' : r.rewardType}）`" :value="r.id" />
+          </el-select>
         </el-form-item>
         <el-row :gutter="12">
           <el-col :span="12">
@@ -125,13 +133,15 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   fetchActivities, createActivity, updateActivity, deleteActivity,
-  publishActivity, fetchActivityStores,
+  publishActivity, fetchActivityStores, fetchActivityRewards,
   type ActivityRow, type CreateActivityRequest, type StoreAcceptanceRow,
+  type RewardOption,
 } from '@/api/activity'
 import { fetchAdminStores, type AdminStoreRow } from '@/api/admin'
 
 const activities = ref<ActivityRow[]>([])
 const stores = ref<AdminStoreRow[]>([])
+const rewards = ref<RewardOption[]>([])
 const loading = ref(false)
 const filterType = ref('')
 const filterStatus = ref('')
@@ -139,7 +149,7 @@ const filterStatus = ref('')
 // Create/Edit
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
-const form = reactive<CreateActivityRequest>({ title: '', type: 'PROMOTION', status: 'DRAFT', description: '', coverUrl: '', startAt: undefined, endAt: undefined })
+const form = reactive<CreateActivityRequest>({ title: '', type: 'PROMOTION', status: 'DRAFT', description: '', coverUrl: '', startAt: undefined, endAt: undefined, rewardId: undefined })
 
 // Publish
 const publishVisible = ref(false)
@@ -150,7 +160,7 @@ const publishStoreIds = ref<number[]>([])
 const acceptanceVisible = ref(false)
 const acceptanceList = ref<StoreAcceptanceRow[]>([])
 
-onMounted(() => { loadData(); loadStores() })
+onMounted(() => { loadData(); loadStores(); loadRewards() })
 
 async function loadData() {
   loading.value = true
@@ -165,15 +175,19 @@ async function loadStores() {
   try { stores.value = await fetchAdminStores() } catch { /* silent */ }
 }
 
+async function loadRewards() {
+  try { rewards.value = await fetchActivityRewards() } catch { /* silent */ }
+}
+
 function resetForm() {
   editingId.value = null
-  Object.assign(form, { title: '', type: 'PROMOTION', status: 'DRAFT', description: '', coverUrl: '', startAt: undefined, endAt: undefined })
+  Object.assign(form, { title: '', type: 'PROMOTION', status: 'DRAFT', description: '', coverUrl: '', startAt: undefined, endAt: undefined, rewardId: undefined })
 }
 
 function openCreate() { resetForm(); dialogVisible.value = true }
 function openEdit(row: ActivityRow) {
   editingId.value = row.id
-  Object.assign(form, { title: row.title, type: row.type, description: row.description || '', startAt: row.startAt, endAt: row.endAt })
+  Object.assign(form, { title: row.title, type: row.type, description: row.description || '', startAt: row.startAt, endAt: row.endAt, rewardId: row.rewardId })
   dialogVisible.value = true
 }
 
@@ -183,6 +197,7 @@ async function handleSave() {
       title: form.title,
       type: form.type,
       description: form.description,
+      rewardId: form.rewardId,
     }
     if (form.startAt) payload.startAt = typeof form.startAt === 'string' ? form.startAt : (form.startAt as Date).toISOString()
     if (form.endAt) payload.endAt = typeof form.endAt === 'string' ? form.endAt : (form.endAt as Date).toISOString()

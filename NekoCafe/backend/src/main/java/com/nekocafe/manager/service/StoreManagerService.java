@@ -7,8 +7,12 @@ import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.cat.mapper.CatMapper;
 import com.nekocafe.common.exception.BizException;
 import com.nekocafe.customer.entity.RefundRequest;
+import com.nekocafe.customer.entity.RewardCatalog;
+import com.nekocafe.customer.entity.RewardRedemption;
 import com.nekocafe.customer.entity.Review;
 import com.nekocafe.customer.mapper.RefundRequestMapper;
+import com.nekocafe.customer.mapper.RewardCatalogMapper;
+import com.nekocafe.customer.mapper.RewardRedemptionMapper;
 import com.nekocafe.customer.mapper.ReviewMapper;
 import com.nekocafe.manager.dto.*;
 import com.nekocafe.manager.entity.*;
@@ -28,9 +32,11 @@ import com.nekocafe.store.entity.DiningTable;
 import com.nekocafe.store.entity.Store;
 import com.nekocafe.store.mapper.DiningTableMapper;
 import com.nekocafe.store.mapper.StoreMapper;
+import com.nekocafe.user.entity.MemberAccount;
 import com.nekocafe.user.entity.Role;
 import com.nekocafe.user.entity.User;
 import com.nekocafe.user.entity.UserRole;
+import com.nekocafe.user.mapper.MemberAccountMapper;
 import com.nekocafe.user.mapper.RoleMapper;
 import com.nekocafe.user.mapper.UserMapper;
 import com.nekocafe.user.mapper.UserRoleMapper;
@@ -112,6 +118,9 @@ public class StoreManagerService {
     private final DishPriceHistoryMapper dishPriceHistoryMapper;
     private final ReviewMapper reviewMapper;
     private final RefundRequestMapper refundRequestMapper;
+    private final RewardCatalogMapper rewardCatalogMapper;
+    private final RewardRedemptionMapper rewardRedemptionMapper;
+    private final MemberAccountMapper memberAccountMapper;
 
     public StoreManagerService(
         ManagerUserStoreRoleMapper userStoreRoleMapper,
@@ -134,7 +143,10 @@ public class StoreManagerService {
         DishMapper dishMapper,
         DishPriceHistoryMapper dishPriceHistoryMapper,
         ReviewMapper reviewMapper,
-        RefundRequestMapper refundRequestMapper
+        RefundRequestMapper refundRequestMapper,
+        RewardCatalogMapper rewardCatalogMapper,
+        RewardRedemptionMapper rewardRedemptionMapper,
+        MemberAccountMapper memberAccountMapper
     ) {
         this.userStoreRoleMapper = userStoreRoleMapper;
         this.storeMapper = storeMapper;
@@ -157,6 +169,9 @@ public class StoreManagerService {
         this.dishPriceHistoryMapper = dishPriceHistoryMapper;
         this.reviewMapper = reviewMapper;
         this.refundRequestMapper = refundRequestMapper;
+        this.rewardCatalogMapper = rewardCatalogMapper;
+        this.rewardRedemptionMapper = rewardRedemptionMapper;
+        this.memberAccountMapper = memberAccountMapper;
     }
 
     public ManagerStoreInfo store(Long managerUserId) {
@@ -750,10 +765,72 @@ public class StoreManagerService {
         row.setHandledAt(LocalDateTime.now());
         row.setHandleRemark(normalizeOptional(request.remark()));
         activityStoreMapper.updateById(row);
+
+        // Distribute coupon to store customers when accepted
+        if ("ACCEPTED".equals(decision)) {
+            PromotionActivity activity = promotionActivityMapper.selectById(row.getActivityId());
+            if (activity != null && activity.getRewardId() != null) {
+                distributeCouponToStoreCustomers(activity, storeId);
+            }
+        }
+
         return activities(managerUserId, null).stream()
             .filter(activity -> activity.activityStoreId().equals(row.getId()))
             .findFirst()
             .orElseThrow(() -> new BizException(2251, "活动不存在或不属于当前门店"));
+    }
+
+    private void distributeCouponToStoreCustomers(PromotionActivity activity, Long storeId) {
+        RewardCatalog reward = rewardCatalogMapper.selectById(activity.getRewardId());
+        if (reward == null || Integer.valueOf(1).equals(reward.getDeleted())) {
+            return;
+        }
+        if (!"ACTIVE".equals(reward.getStatus())) {
+            return;
+        }
+
+        // Find all distinct customers who have placed orders at this store
+        List<FoodOrder> orders = foodOrderMapper.selectList(new LambdaQueryWrapper<FoodOrder>()
+                .select(FoodOrder::getUserId)
+                .eq(FoodOrder::getStoreId, storeId)
+                .isNotNull(FoodOrder::getUserId)
+                .eq(FoodOrder::getDeleted, 0)
+                .groupBy(FoodOrder::getUserId));
+        if (orders.isEmpty()) return;
+
+        for (FoodOrder order : orders) {
+            Long userId = order.getUserId();
+            if (userId == null) continue;
+
+            // Check if already distributed for this activity
+            Long existingCount = rewardRedemptionMapper.selectCount(new LambdaQueryWrapper<RewardRedemption>()
+                    .eq(RewardRedemption::getUserId, userId)
+                    .eq(RewardRedemption::getRewardId, reward.getId())
+                    .eq(RewardRedemption::getSourceType, "ACTIVITY")
+                    .eq(RewardRedemption::getSourceId, activity.getId())
+                    .eq(RewardRedemption::getDeleted, 0));
+            if (existingCount > 0) continue;
+
+            // Look up member account for the user
+            MemberAccount account = memberAccountMapper.selectOne(new LambdaQueryWrapper<MemberAccount>()
+                    .eq(MemberAccount::getUserId, userId)
+                    .last("LIMIT 1"));
+            if (account == null) continue;
+
+            RewardRedemption redemption = new RewardRedemption();
+            redemption.setRedemptionNo("A" + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS")) + userId);
+            redemption.setUserId(userId);
+            redemption.setMemberAccountId(account.getId());
+            redemption.setRewardId(reward.getId());
+            redemption.setRewardName(reward.getName());
+            redemption.setPointsCost(0);
+            redemption.setSourceType("ACTIVITY");
+            redemption.setSourceId(activity.getId());
+            redemption.setStatus("REDEEMED");
+            redemption.setRedeemedAt(LocalDateTime.now());
+            redemption.setDeleted(0);
+            rewardRedemptionMapper.insert(redemption);
+        }
     }
 
     public List<ManagerDishRow> dishes(Long managerUserId, Long categoryId, String status) {
