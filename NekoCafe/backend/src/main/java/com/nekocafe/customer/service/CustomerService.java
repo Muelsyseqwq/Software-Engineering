@@ -408,6 +408,7 @@ public class CustomerService {
         int balanceAfter = currentPoints + earned;
         account.setPoints(balanceAfter);
         account.setTotalSpent((account.getTotalSpent() == null ? BigDecimal.ZERO : account.getTotalSpent()).add(amount));
+        syncMemberLevel(account);
         memberAccountMapper.updateById(account);
 
         PointsTransaction transaction = new PointsTransaction();
@@ -451,6 +452,27 @@ public class CustomerService {
         return normalized == null ? "NORMAL" : normalized.toUpperCase();
     }
 
+    private boolean syncMemberLevel(MemberAccount account) {
+        if (account == null) {
+            return false;
+        }
+        int points = account.getPoints() == null ? 0 : account.getPoints();
+        String targetLevel;
+        if (points >= 1000) {
+            targetLevel = "SVIP";
+        } else if (points >= 500) {
+            targetLevel = "VIP";
+        } else {
+            targetLevel = "NORMAL";
+        }
+        String currentLevel = normalizeLevel(account.getLevelCode());
+        if (levelRank(targetLevel) > levelRank(currentLevel)) {
+            account.setLevelCode(targetLevel);
+            return true;
+        }
+        return false;
+    }
+
     private int levelRank(String level) {
         String normalized = normalizeLevel(level);
         return switch (normalized) {
@@ -475,6 +497,9 @@ public class CustomerService {
             .eq(MemberAccount::getUserId, userId)
             .last("LIMIT 1"));
         if (account != null) {
+            if (syncMemberLevel(account)) {
+                memberAccountMapper.updateById(account);
+            }
             return account;
         }
         MemberAccount created = new MemberAccount();
