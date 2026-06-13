@@ -1,34 +1,105 @@
-version: "3.9"
-
 services:
+  mysql:
+    image: mysql:8.0
+    container_name: nekocafe-mysql
+    environment:
+      MYSQL_DATABASE: ${COMPOSE_MYSQL_DATABASE:-nekocafe}
+      MYSQL_USER: ${COMPOSE_MYSQL_USERNAME:-nekocafe_app}
+      MYSQL_PASSWORD: ${COMPOSE_MYSQL_PASSWORD:-nekocafe_demo_password}
+      MYSQL_ROOT_PASSWORD: ${COMPOSE_MYSQL_ROOT_PASSWORD:-nekocafe_demo_root_password}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+08:00
+    ports:
+      - "${MYSQL_PORT_HOST:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: nekocafe-redis
-    ports:
-      - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT_HOST:-6379}:6379"
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
 
-  mysql-local:
-    image: mysql:8.0
-    container_name: nekocafe-mysql-local
-    profiles: ["local-mysql"]
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: nekocafe-backend
     environment:
-      MYSQL_DATABASE: nekocafe
-      MYSQL_USER: nekocafe_app
-      MYSQL_PASSWORD: change_me
-      MYSQL_ROOT_PASSWORD: change_root_me
-      TZ: Asia/Shanghai
+      NEKO_PROFILE: dev
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${COMPOSE_MYSQL_DATABASE:-nekocafe}
+      MYSQL_USERNAME: ${COMPOSE_MYSQL_USERNAME:-nekocafe_app}
+      MYSQL_PASSWORD: ${COMPOSE_MYSQL_PASSWORD:-nekocafe_demo_password}
+      MYSQL_USE_SSL: "false"
+      FLYWAY_ENABLED: "true"
+      JWT_SECRET: ${JWT_SECRET:-nekocafe_demo_jwt_secret_change_before_real_use_2026}
+      JWT_EXPIRES_MINUTES: ${JWT_EXPIRES_MINUTES:-120}
+      AI_ENABLED: ${AI_ENABLED:-false}
+      AI_PROVIDER: ${AI_PROVIDER:-openai-compatible}
+      AI_BASE_URL: ${AI_BASE_URL:-https://api.deepseek.com}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-deepseek-v4-flash}
+      AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-20}
+      AI_MAX_TOKENS: ${AI_MAX_TOKENS:-1000}
+      AI_TEMPERATURE: ${AI_TEMPERATURE:-0.3}
+      CAT_PHOTO_UPLOAD_DIR: /app/uploads/cats
+      STORE_PHOTO_UPLOAD_DIR: /app/uploads/stores
     ports:
-      - "3306:3306"
-    command: >
-      --character-set-server=utf8mb4
-      --collation-server=utf8mb4_general_ci
-      --default-time-zone=+08:00
+      - "${BACKEND_PORT_HOST:-8080}:8080"
     volumes:
-      - mysql-local-data:/var/lib/mysql
+      - backend-uploads:/app/uploads
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: nekocafe-frontend
+    ports:
+      - "${FRONTEND_PORT_HOST:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
 
 volumes:
+  mysql-data:
   redis-data:
-  mysql-local-data:
+  backend-uploads:

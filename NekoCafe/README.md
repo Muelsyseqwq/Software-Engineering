@@ -11,11 +11,104 @@
 
 ## 前置依赖
 
+### Docker 一键演示启动
+
+如果只需要按课程验收方式运行完整系统，推荐安装：
+
+- Docker Desktop / Docker Engine
+- Docker Compose v2
+
+然后直接使用下方“一键 Docker 启动”。
+
+### 手工本地开发
+
+如果需要分别启动前后端进行开发，需要安装：
+
 - JDK 17+
 - Maven 3.9+
 - Node.js 20+
 - npm 10+ 或兼容包管理器
 - 可访问的远程 MySQL 8 数据库
+
+## 一键 Docker 启动
+
+在 `NekoCafe/` 目录执行：
+
+```bash
+docker compose up --build
+```
+
+首次启动会构建前后端镜像，MySQL 初始化后后端会通过 Flyway 自动创建表结构并写入演示数据。启动完成后访问：
+
+| 服务 | 地址 |
+|---|---|
+| 前端应用 | `http://localhost` |
+| 后端健康检查 | `http://localhost:8080/actuator/health` |
+| 反向代理 API 健康检查 | `http://localhost/api/health` |
+| Swagger UI | `http://localhost:8080/swagger-ui/index.html` |
+| MySQL | `localhost:3306` |
+| Redis | `localhost:6379` |
+
+Docker Compose 使用 `COMPOSE_MYSQL_*` 变量创建并连接容器内 MySQL，避免和手工开发用的 `MYSQL_HOST`、`MYSQL_USERNAME`、`MYSQL_PASSWORD` 冲突。
+
+如果本机 `80`、`8080`、`3306` 或 `6379` 端口被占用，可复制 `.env.example` 为 `.env` 并调整：
+
+```dotenv
+FRONTEND_PORT_HOST=8088
+BACKEND_PORT_HOST=18080
+MYSQL_PORT_HOST=3307
+REDIS_PORT_HOST=6380
+```
+
+调整后访问地址同步变为：
+
+| 服务 | 示例地址 |
+|---|---|
+| 前端应用 | `http://localhost:8088` |
+| 后端健康检查 | `http://localhost:18080/actuator/health` |
+| 反向代理 API 健康检查 | `http://localhost:8088/api/health` |
+| Swagger UI | `http://localhost:18080/swagger-ui/index.html` |
+| MySQL | `localhost:3307` |
+| Redis | `localhost:6380` |
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+如需清理数据库、Redis 和上传文件卷，恢复首次启动状态：
+
+```bash
+docker compose down -v
+```
+
+如果后端日志出现 `Access denied for user ...`，通常是旧 `.env` 变量或旧 MySQL 数据卷中的账号与当前 Compose 配置不一致。请先确认 `.env` 中的 `COMPOSE_MYSQL_*` 变量，必要时执行 `docker compose down -v` 后重新 `docker compose up --build -d`。
+
+### 启用 DeepSeek AI 推荐
+
+Docker Compose 默认保持 `AI_ENABLED=false`，这样没有 API Key 时系统也能稳定启动，并使用规则推荐/兜底推荐文案。如果需要启用你接入的 DeepSeek，请在本地 `.env` 中配置：
+
+```dotenv
+AI_ENABLED=true
+AI_PROVIDER=openai-compatible
+AI_BASE_URL=https://api.deepseek.com
+AI_API_KEY=你的_DeepSeek_API_Key
+AI_MODEL=deepseek-v4-flash
+AI_TIMEOUT_SECONDS=20
+AI_MAX_TOKENS=1000
+AI_TEMPERATURE=0.3
+```
+
+修改后重建后端容器：
+
+```bash
+docker compose up --build -d backend frontend
+```
+
+> 安全提醒：不要把真实 `AI_API_KEY` 写入代码、README、截图、日志或提交记录；只放在本机 `.env`、CI Secret 或服务器环境变量中。
+
+> 安全提醒：`.env.example` 和 `docker-compose.yml` 中的密码、JWT secret 仅用于本地课程演示。真实部署前必须通过 `.env`、CI Secret 或服务器环境变量替换，不要把真实密钥写入代码、README、日志或截图。
 
 ## 配置环境变量
 
@@ -92,21 +185,15 @@ npm run dev
 
 统一演示密码：`NekoCafe@2026`。
 
-## 可选 Redis
+## Redis 与本地 MySQL
 
-如果需要本地 Redis：
-
-```bash
-make up
-```
-
-如果远程 MySQL 临时不可用，可用本地 MySQL 应急 profile：
+`docker compose up --build` 会默认启动 Redis 和 MySQL，并将后端连接到 Compose 内部的 `mysql` 服务。手工开发时如需只启动基础设施，可仍使用 Docker Compose 指定服务：
 
 ```bash
-docker compose --profile local-mysql up -d mysql-local
+docker compose up -d mysql redis
 ```
 
-这只是离线开发兜底，正式开发配置仍以远程 MySQL 为准。
+如果你使用远程 MySQL 手工开发，请按 `.env.example` 配置 `MYSQL_HOST`、`MYSQL_USERNAME`、`MYSQL_PASSWORD` 等变量，并在终端或 IDE 中导出后再启动后端。
 
 ## MVP 开发主线
 
