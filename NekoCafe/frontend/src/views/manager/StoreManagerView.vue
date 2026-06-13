@@ -168,6 +168,7 @@
             <el-table-column label="金额" width="110"><template #default="{ row }">¥{{ money(row.totalAmount) }}</template></el-table-column>
             <el-table-column label="状态" width="110"><template #default="{ row }"><el-tag :type="orderStatusTag(row.status)">{{ orderStatusLabel(row.status) }}</el-tag></template></el-table-column>
             <el-table-column label="退款" width="110"><template #default="{ row }">{{ refundStatusLabel(row.refundStatus) }}</template></el-table-column>
+            <el-table-column label="退款原因" min-width="180" show-overflow-tooltip><template #default="{ row }">{{ row.refundReason || '—' }}</template></el-table-column>
             <el-table-column prop="paidAt" label="支付时间" min-width="170" />
             <el-table-column prop="completedAt" label="完成时间" min-width="170" />
             <el-table-column prop="createdAt" label="创建时间" min-width="170" />
@@ -365,6 +366,8 @@
         <p><strong>顾客：</strong>{{ orderDetail.customerName || '散客' }}</p>
         <p><strong>金额：</strong>¥{{ money(orderDetail.totalAmount) }}</p>
         <p><strong>状态：</strong>{{ orderStatusLabel(orderDetail.status) }}</p>
+        <p><strong>退款状态：</strong>{{ refundStatusLabel(orderDetail.refundStatus) }}</p>
+        <p v-if="orderDetail.refundReason"><strong>退款原因：</strong>{{ orderDetail.refundReason }}</p>
         <p><strong>顾客评价：</strong>{{ orderReviewText(orderDetail) }}</p>
         <el-table :data="orderDetail.items" border size="small"><el-table-column prop="dishName" label="菜品" /><el-table-column label="单价"><template #default="{ row }">¥{{ money(row.unitPrice) }}</template></el-table-column><el-table-column prop="quantity" label="数量" /><el-table-column label="小计"><template #default="{ row }">¥{{ money(row.subtotal) }}</template></el-table-column></el-table>
       </div>
@@ -657,9 +660,10 @@ async function openOrderDetail(id: number) {
 }
 async function handleRefundDecision(row: ManagerOrderRow, decision: 'APPROVED' | 'REJECTED') {
   const actionText = decision === 'APPROVED' ? '同意' : '拒绝'
+  const refundReasonText = row.refundReason ? `\n退款原因：${row.refundReason}` : ''
   let remark = ''
   try {
-    const result = await ElMessageBox.prompt(`确认${actionText}订单 ${row.orderNo} 的退款申请吗？`, `${actionText}退款`, {
+    const result = await ElMessageBox.prompt(`确认${actionText}订单 ${row.orderNo} 的退款申请吗？${refundReasonText}`, `${actionText}退款`, {
       confirmButtonText: '确认',
       cancelButtonText: '取消',
       inputPlaceholder: decision === 'REJECTED' ? '请填写拒绝原因，顾客可见' : '审核备注，顾客可见',

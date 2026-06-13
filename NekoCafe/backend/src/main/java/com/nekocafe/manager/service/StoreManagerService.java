@@ -90,6 +90,7 @@ public class StoreManagerService {
     private static final Set<String> SHIFT_STATUSES = Set.of(SCHEDULED, ON_LEAVE, CANCELLED, COMPLETED);
     private static final Set<String> ACTIVITY_DECISIONS = Set.of("ACCEPTED", REJECTED);
     private static final Set<String> REFUND_DECISIONS = Set.of(APPROVED, REJECTED);
+    private static final Set<String> REFUND_REASON_STATUSES = Set.of(APPLIED, APPROVED, REJECTED, "REFUNDED");
     private static final DateTimeFormatter SLOT_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
 
     private final ManagerUserStoreRoleMapper userStoreRoleMapper;
@@ -498,7 +499,7 @@ public class StoreManagerService {
             .orderByDesc(Review::getCreatedAt)
             .last("LIMIT 1"));
         return new ManagerOrderDetail(row.id(), row.orderNo(), row.customerName(), row.tableNo(), row.reservationNo(),
-            row.totalAmount(), row.status(), row.refundStatus(), order.getRemark(), row.paidAt(), row.completedAt(), row.createdAt(),
+            row.totalAmount(), row.status(), row.refundStatus(), row.refundReason(), order.getRemark(), row.paidAt(), row.completedAt(), row.createdAt(),
             review == null ? null : review.getRating(), review == null ? null : review.getContent(), review == null ? null : review.getCreatedAt(), items);
     }
 
@@ -883,13 +884,26 @@ public class StoreManagerService {
                 .limit(3)
                 .map(item -> item.getDishName() + "×" + item.getQuantity())
                 .collect(Collectors.joining("、")))));
+        List<Long> refundOrderIds = orders.stream()
+            .filter(order -> REFUND_REASON_STATUSES.contains(order.getRefundStatus()))
+            .map(FoodOrder::getId)
+            .filter(Objects::nonNull)
+            .distinct()
+            .toList();
+        Map<Long, RefundRequest> refundMap = refundOrderIds.isEmpty() ? Map.of() : refundRequestMapper.selectList(new LambdaQueryWrapper<RefundRequest>()
+                .in(RefundRequest::getOrderId, refundOrderIds)
+                .orderByDesc(RefundRequest::getCreatedAt)
+                .orderByDesc(RefundRequest::getId))
+            .stream()
+            .collect(Collectors.toMap(RefundRequest::getOrderId, Function.identity(), (first, ignored) -> first));
         return orders.stream().map(order -> {
             User user = order.getUserId() == null ? null : userMap.get(order.getUserId());
             DiningTable table = order.getTableId() == null ? null : tableMap.get(order.getTableId());
             Reservation reservation = order.getReservationId() == null ? null : reservationMap.get(order.getReservationId());
+            RefundRequest refund = refundMap.get(order.getId());
             return new ManagerOrderRow(order.getId(), order.getOrderNo(), user == null ? "散客" : user.getNickname(),
                 table == null ? null : table.getTableNo(), reservation == null ? null : reservation.getReservationNo(),
-                order.getTotalAmount(), order.getStatus(), order.getRefundStatus(), order.getPaidAt(), order.getCompletedAt(),
+                order.getTotalAmount(), order.getStatus(), order.getRefundStatus(), refund == null ? null : refund.getReason(), order.getPaidAt(), order.getCompletedAt(),
                 order.getCreatedAt(), summaryMap.getOrDefault(order.getId(), ""));
         }).toList();
     }
