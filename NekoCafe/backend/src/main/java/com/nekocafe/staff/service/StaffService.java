@@ -90,6 +90,13 @@ public class StaffService {
         return roles.stream().map(UserStoreRole::getStoreId).distinct().toList();
     }
 
+    private void assertStoreBelongsToStaff(Long staffId, Long storeId) {
+        List<Long> storeIds = resolveStoreIds(staffId);
+        if (!storeIds.contains(storeId)) {
+            throw new BizException(5403, "无权操作非本门店的数据");
+        }
+    }
+
     public List<StaffReservationRow> todayReservations(Long staffId) {
         List<Long> storeIds = resolveStoreIds(staffId);
         if (storeIds.isEmpty()) {
@@ -156,6 +163,7 @@ public class StaffService {
         if (reservation == null || reservation.getDeleted() == 1) {
             throw new BizException(4001, "预约不存在");
         }
+        assertStoreBelongsToStaff(staffId, reservation.getStoreId());
         reservation.setStatus("CHECKED_IN");
         reservation.setCheckedInAt(LocalDateTime.now());
         reservationMapper.updateById(reservation);
@@ -199,6 +207,7 @@ public class StaffService {
     @Transactional
     public void startOrder(Long id, Long staffId) {
         FoodOrder order = loadOrder(id);
+        assertStoreBelongsToStaff(staffId, order.getStoreId());
         if (PREPARING.equals(order.getStatus())) {
             return;
         }
@@ -211,8 +220,9 @@ public class StaffService {
     }
 
     @Transactional
-    public void completeOrder(Long id) {
+    public void completeOrder(Long id, Long staffId) {
         FoodOrder order = loadOrder(id);
+        assertStoreBelongsToStaff(staffId, order.getStoreId());
         if (COMPLETED.equals(order.getStatus())) {
             return;
         }
@@ -285,6 +295,7 @@ public class StaffService {
         if (table == null || table.getDeleted() == 1) {
             throw new BizException(4004, "桌位不存在");
         }
+        assertStoreBelongsToStaff(staffId, table.getStoreId());
         String oldStatus = table.getStatus();
         table.setStatus(newStatus);
         diningTableMapper.updateById(table);

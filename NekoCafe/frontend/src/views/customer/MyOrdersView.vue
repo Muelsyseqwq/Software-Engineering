@@ -29,6 +29,7 @@
           </div>
           <div class="neko-action-bar">
             <el-button v-if="order.canPay" type="primary" :loading="payingId === order.id" @click="pay(order)">继续支付</el-button>
+            <el-button v-if="order.canCancel" type="info" plain :loading="cancellingId === order.id" @click="cancel(order)">取消订单</el-button>
             <el-button v-if="order.canRefund" type="warning" plain @click="openRefund(order)">申请退款</el-button>
             <el-button v-if="order.canReview" type="success" plain @click="openReview(order)">去评价</el-button>
             <el-tag v-if="order.reviewed" type="success" effect="plain">已评价</el-tag>
@@ -53,13 +54,14 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchMyOrders, type OrderResponse } from '@/api/order'
+import { cancelOrder, fetchMyOrders, type OrderResponse } from '@/api/order'
 import { sandboxPay } from '@/api/payment'
 import { applyRefund, createReview, fetchMyRefunds, type RefundResponse } from '@/api/customer'
 
 const loading = ref(false)
 const submitting = ref(false)
 const payingId = ref<number>()
+const cancellingId = ref<number>()
 const orders = ref<OrderResponse[]>([])
 const refunds = ref<RefundResponse[]>([])
 const selectedOrder = ref<OrderResponse>()
@@ -75,6 +77,7 @@ function statusTag(status: string) { return ({ CREATED: 'warning', PAID: 'primar
 function formatTime(value?: string) { return value ? value.replace('T', ' ').slice(0, 16) : '-' }
 async function loadOrders() { loading.value = true; try { const [orderRows, refundRows] = await Promise.all([fetchMyOrders(), fetchMyRefunds()]); orders.value = orderRows; refunds.value = refundRows } catch (error) { ElMessage.error(error instanceof Error ? error.message : '订单加载失败') } finally { loading.value = false } }
 async function pay(order: OrderResponse) { payingId.value = order.id; try { await sandboxPay(order.id); ElMessage.success('支付成功，积分已更新'); await loadOrders() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '支付失败') } finally { payingId.value = undefined } }
+async function cancel(order: OrderResponse) { cancellingId.value = order.id; try { await cancelOrder(order.id); ElMessage.success('订单已取消'); await loadOrders() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '取消失败') } finally { cancellingId.value = undefined } }
 function openReview(order: OrderResponse) { selectedOrder.value = order; reviewForm.rating = 5; reviewForm.content = ''; reviewDialog.value = true }
 function openRefund(order: OrderResponse) { selectedOrder.value = order; refundReason.value = ''; refundDialog.value = true }
 async function submitReview() { if (!selectedOrder.value) return; submitting.value = true; try { await createReview(selectedOrder.value.id, reviewForm); ElMessage.success('评价已提交'); reviewDialog.value = false; await loadOrders() } catch (error) { ElMessage.error(error instanceof Error ? error.message : '评价失败') } finally { submitting.value = false } }

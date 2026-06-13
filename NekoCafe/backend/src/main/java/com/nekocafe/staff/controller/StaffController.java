@@ -59,8 +59,8 @@ public class StaffController {
     }
 
     @PostMapping("/orders/{id}/complete")
-    public ApiResult<Void> completeOrder(@PathVariable Long id) {
-        staffService.completeOrder(id);
+    public ApiResult<Void> completeOrder(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        staffService.completeOrder(id, principal.userId());
         return ApiResult.ok();
     }
 
