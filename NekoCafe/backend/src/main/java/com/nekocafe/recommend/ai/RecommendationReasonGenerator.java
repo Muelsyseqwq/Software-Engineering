@@ -2,6 +2,7 @@ package com.nekocafe.recommend.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nekocafe.recommend.dto.RecommendationCatItem;
 import com.nekocafe.recommend.dto.RecommendationHighlight;
 import com.nekocafe.recommend.dto.RecommendationStoreItem;
 import org.slf4j.Logger;
@@ -28,6 +29,17 @@ public class RecommendationReasonGenerator {
         不要提及内部推荐分、用户 ID、系统实现、模型名称或隐私信息。
         输出必须是合法 JSON 对象，首字符必须是 {，不要使用 Markdown，不要添加解释或前后缀文字。
         JSON 格式必须严格为：{"items":[{"storeId":数字,"reasons":["理由1","理由2"]}]}。
+        """;
+    private static final String CAT_SYSTEM_PROMPT = """
+        你是 NekoCafe 猫咖系统的猫咪推荐文案助手，目标是根据猫咪性格写出温柔、具体、有陪伴感的推荐理由。
+        只能使用输入中明确提供的信息，不要编造不存在的猫咪性格、健康状态、门店、活动、优惠或用户信息。
+        每只猫生成 2 条中文理由，每条 35 到 75 个中文字符，三只猫的表达方式不要相同。
+        每只猫至少 1 条理由必须包含猫咪名字；至少 1 条理由必须引用 personality、interact、healthStatus、storeName 或 tags 中的具体信息。
+        如果输入中没有用户偏好，不要说“命中你的偏好”，可以说“适合想要轻松互动的顾客”等中性表达。
+        避免泛泛表达，例如“很可爱”“值得推荐”“体验很好”“适合互动”。
+        不要提及内部推荐分、用户 ID、系统实现、模型名称或隐私信息。
+        输出必须是合法 JSON 对象，首字符必须是 {，不要使用 Markdown，不要添加解释或前后缀文字。
+        JSON 格式必须严格为：{"items":[{"catId":数字,"reasons":["理由1","理由2"]}]}。
         """;
 
     private final AiReasonProperties properties;
@@ -97,6 +109,57 @@ public class RecommendationReasonGenerator {
         }
     }
 
+    public List<RecommendationCatItem> enhanceCatReasons(List<RecommendationCatItem> items, List<String> preferences) {
+        if (items == null || items.isEmpty()) {
+            lastStatus = "SKIPPED_EMPTY_CAT_ITEMS";
+            lastErrorType = "";
+            lastErrorMessage = "";
+            return items;
+        }
+        if (!properties.available()) {
+            lastStatus = "SKIPPED_CAT_NOT_AVAILABLE";
+            lastErrorType = "";
+            lastErrorMessage = "";
+            return items;
+        }
+        try {
+            String payload = objectMapper.writeValueAsString(new AiCatReasonRequest(
+                "请为这些已经排序好的猫咪推荐结果重写更自然、更有猫咖氛围的推荐理由。templateReasons 只用于理解推荐信号，不能照抄。",
+                preferences == null ? List.of() : preferences,
+                items.stream().map(this::toPromptCatItem).toList()
+            ));
+            String content = client.chat(CAT_SYSTEM_PROMPT, payload);
+            AiCatReasonResponse response = objectMapper.readValue(cleanJson(content), AiCatReasonResponse.class);
+            Map<Long, List<String>> reasonsByCat = response.items() == null
+                ? Map.of()
+                : response.items().stream()
+                    .filter(item -> item.catId() != null && item.reasons() != null && !item.reasons().isEmpty())
+                    .collect(Collectors.toMap(
+                        AiCatReasonItem::catId,
+                        item -> sanitizeReasons(item.reasons()),
+                        (left, right) -> left
+                    ));
+            if (reasonsByCat.isEmpty()) {
+                lastStatus = "FALLBACK_EMPTY_AI_CAT_REASONS";
+                lastErrorType = "";
+                lastErrorMessage = "";
+                return items;
+            }
+            lastStatus = "CAT_SUCCESS";
+            lastErrorType = "";
+            lastErrorMessage = "";
+            return items.stream()
+                .map(item -> replaceCatReasons(item, reasonsByCat.get(item.catId())))
+                .toList();
+        } catch (Exception ex) {
+            lastStatus = "FALLBACK_CAT_EXCEPTION";
+            lastErrorType = ex.getClass().getSimpleName();
+            lastErrorMessage = sanitizeErrorMessage(ex.getMessage());
+            log.warn("AI cat recommendation reason generation failed; falling back to template reasons: {}", ex.getClass().getSimpleName());
+            return items;
+        }
+    }
+
     public String lastStatus() {
         return lastStatus;
     }
@@ -107,6 +170,29 @@ public class RecommendationReasonGenerator {
 
     public String lastErrorMessage() {
         return lastErrorMessage;
+    }
+
+    private RecommendationCatItem replaceCatReasons(RecommendationCatItem item, List<String> aiReasons) {
+        if (aiReasons == null || aiReasons.isEmpty()) {
+            return item;
+        }
+        return new RecommendationCatItem(
+            item.rank(),
+            item.catId(),
+            item.catName(),
+            item.breed(),
+            item.photoUrl(),
+            item.storeId(),
+            item.storeName(),
+            item.personality(),
+            item.interact(),
+            item.healthStatus(),
+            item.status(),
+            item.score(),
+            item.tags(),
+            aiReasons,
+            item.primaryActionText()
+        );
     }
 
     private RecommendationStoreItem replaceReasons(RecommendationStoreItem item, List<String> aiReasons) {
@@ -129,6 +215,20 @@ public class RecommendationReasonGenerator {
             item.catHighlights(),
             item.activityHighlights(),
             item.primaryActionText()
+        );
+    }
+
+    private PromptCatItem toPromptCatItem(RecommendationCatItem item) {
+        return new PromptCatItem(
+            item.catId(),
+            item.catName(),
+            item.breed(),
+            item.storeName(),
+            item.personality(),
+            item.interact(),
+            item.healthStatus(),
+            item.tags(),
+            item.reasons()
         );
     }
 
@@ -204,6 +304,22 @@ public class RecommendationReasonGenerator {
     private record AiReasonRequest(String task, List<PromptStoreItem> stores) {
     }
 
+    private record AiCatReasonRequest(String task, List<String> preferences, List<PromptCatItem> cats) {
+    }
+
+    private record PromptCatItem(
+        Long catId,
+        String catName,
+        String breed,
+        String storeName,
+        String personality,
+        String interact,
+        String healthStatus,
+        List<String> tags,
+        List<String> templateReasons
+    ) {
+    }
+
     private record PromptStoreItem(
         Long storeId,
         String storeName,
@@ -220,6 +336,12 @@ public class RecommendationReasonGenerator {
     private record AiReasonResponse(List<AiReasonItem> items) {
     }
 
+    private record AiCatReasonResponse(List<AiCatReasonItem> items) {
+    }
+
     private record AiReasonItem(Long storeId, List<String> reasons) {
+    }
+
+    private record AiCatReasonItem(Long catId, List<String> reasons) {
     }
 }

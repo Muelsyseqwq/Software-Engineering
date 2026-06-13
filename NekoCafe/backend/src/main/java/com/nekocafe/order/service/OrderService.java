@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.nekocafe.common.exception.BizException;
 import com.nekocafe.customer.entity.Review;
 import com.nekocafe.customer.mapper.ReviewMapper;
+import com.nekocafe.customer.service.RewardRedemptionService;
 import com.nekocafe.menu.entity.Dish;
 import com.nekocafe.menu.mapper.DishMapper;
 import com.nekocafe.order.entity.FoodOrder;
@@ -43,6 +44,7 @@ public class OrderService {
     private final DiningTableMapper diningTableMapper;
     private final ReservationMapper reservationMapper;
     private final ReviewMapper reviewMapper;
+    private final RewardRedemptionService rewardRedemptionService;
 
     public OrderService(
         FoodOrderMapper orderMapper,
@@ -51,7 +53,8 @@ public class OrderService {
         StoreMapper storeMapper,
         DiningTableMapper diningTableMapper,
         ReservationMapper reservationMapper,
-        ReviewMapper reviewMapper
+        ReviewMapper reviewMapper,
+        RewardRedemptionService rewardRedemptionService
     ) {
         this.orderMapper = orderMapper;
         this.orderItemMapper = orderItemMapper;
@@ -60,6 +63,7 @@ public class OrderService {
         this.diningTableMapper = diningTableMapper;
         this.reservationMapper = reservationMapper;
         this.reviewMapper = reviewMapper;
+        this.rewardRedemptionService = rewardRedemptionService;
     }
 
     @Transactional
@@ -104,6 +108,10 @@ public class OrderService {
             total = total.add(dish.getPrice().multiply(BigDecimal.valueOf(item.quantity())));
         }
 
+        RewardRedemptionService.CouponUsage couponUsage = rewardRedemptionService.prepareForOrder(userId, request.rewardRedemptionId(), total);
+        BigDecimal discountAmount = couponUsage == null ? BigDecimal.ZERO : couponUsage.discountAmount();
+        BigDecimal payableAmount = total.subtract(discountAmount).max(BigDecimal.ZERO);
+
         FoodOrder order = new FoodOrder();
         order.setOrderNo(generateOrderNo(userId));
         order.setUserId(userId);
@@ -111,10 +119,15 @@ public class OrderService {
         order.setReservationId(request.reservationId());
         order.setTableId(reservation == null ? null : reservation.getTableId());
         order.setTotalAmount(total);
+        order.setRewardRedemptionId(couponUsage == null ? null : couponUsage.redemptionId());
+        order.setCouponDiscountAmount(discountAmount);
+        order.setPayableAmount(payableAmount);
+        order.setCouponName(couponUsage == null ? null : couponUsage.rewardName());
         order.setStatus(CREATED);
         order.setRefundStatus(NONE);
         order.setRemark(normalizeOptional(request.remark()));
         orderMapper.insert(order);
+        rewardRedemptionService.bindToOrder(userId, couponUsage, order.getId());
 
         for (CreateOrderItemRequest item : request.items()) {
             Dish dish = dishMap.get(item.dishId());
@@ -192,6 +205,10 @@ public class OrderService {
             table == null ? null : table.getTableNo(),
             order.getReservationId(),
             order.getTotalAmount(),
+            order.getRewardRedemptionId(),
+            order.getCouponName(),
+            order.getCouponDiscountAmount() == null ? BigDecimal.ZERO : order.getCouponDiscountAmount(),
+            order.getPayableAmount() == null ? order.getTotalAmount() : order.getPayableAmount(),
             order.getStatus(),
             refundStatus,
             order.getRemark(),
@@ -245,7 +262,7 @@ public class OrderService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    public record CreateOrderRequest(Long storeId, Long reservationId, List<CreateOrderItemRequest> items, String remark) {
+    public record CreateOrderRequest(Long storeId, Long reservationId, List<CreateOrderItemRequest> items, String remark, Long rewardRedemptionId) {
     }
 
     public record CreateOrderItemRequest(Long dishId, Integer quantity) {
@@ -263,6 +280,10 @@ public class OrderService {
         String tableNo,
         Long reservationId,
         BigDecimal totalAmount,
+        Long rewardRedemptionId,
+        String couponName,
+        BigDecimal couponDiscountAmount,
+        BigDecimal payableAmount,
         String status,
         String refundStatus,
         String remark,

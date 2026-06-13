@@ -68,6 +68,28 @@
         </div>
         <el-empty v-else description="还没有选择菜品" />
 
+        <div class="coupon-card">
+          <div class="coupon-heading">
+            <span>可用兑换券</span>
+            <el-tag v-if="availableCoupons.length" type="success" effect="plain">{{ availableCoupons.length }} 张</el-tag>
+          </div>
+          <el-select v-if="availableCoupons.length" v-model="selectedRedemptionId" clearable placeholder="选择一张积分兑换券">
+            <el-option
+              v-for="coupon in availableCoupons"
+              :key="coupon.id"
+              :label="`${coupon.rewardName} · ${formatTime(coupon.redeemedAt)}`"
+              :value="coupon.id"
+            />
+          </el-select>
+          <p v-else>暂无可用兑换券，可在会员中心用积分兑换后再来结算。</p>
+        </div>
+
+        <div class="amount-lines">
+          <div><span>商品总额</span><strong>¥{{ totalAmount.toFixed(2) }}</strong></div>
+          <div v-if="currentOrder?.couponDiscountAmount"><span>{{ currentOrder.couponName || '兑换券抵扣' }}</span><strong class="discount">-¥{{ Number(currentOrder.couponDiscountAmount).toFixed(2) }}</strong></div>
+          <div class="payable"><span>应付金额</span><strong>¥{{ payablePreview.toFixed(2) }}</strong></div>
+        </div>
+
         <el-input v-model="remark" type="textarea" :rows="3" maxlength="120" show-word-limit placeholder="备注：例如少糖、靠窗、和猫咪保持距离等" />
 
         <div class="neko-action-bar">
@@ -82,7 +104,7 @@
         <div v-if="currentOrder" class="result-card">
           <span>订单 {{ currentOrder.orderNo }}</span>
           <strong>{{ getOrderStatusText(currentOrder.status) }}</strong>
-          <small>{{ currentOrder.storeName }}{{ currentOrder.tableNo ? ` · ${currentOrder.tableNo}` : '' }} · ¥{{ Number(currentOrder.totalAmount).toFixed(2) }}</small>
+          <small>{{ currentOrder.storeName }}{{ currentOrder.tableNo ? ` · ${currentOrder.tableNo}` : '' }} · 应付 ¥{{ Number(currentOrder.payableAmount ?? currentOrder.totalAmount).toFixed(2) }}</small>
         </div>
         <div v-if="payment" class="result-card paid">
           <span>支付流水 {{ payment.paymentNo }}</span>
@@ -110,7 +132,7 @@
           <template #default="{ row }">{{ row.tableNo || '-' }}</template>
         </el-table-column>
         <el-table-column label="金额" width="120">
-          <template #default="{ row }">¥{{ Number(row.totalAmount).toFixed(2) }}</template>
+          <template #default="{ row }">¥{{ Number(row.payableAmount ?? row.totalAmount).toFixed(2) }}</template>
         </el-table-column>
         <el-table-column label="状态" width="120">
           <template #default="{ row }">
@@ -132,6 +154,7 @@ import { ElMessage } from 'element-plus'
 import { fetchStoreMenu, type DishItem, type MenuCategory } from '@/api/menu'
 import { fetchStores, type StoreSummary } from '@/api/store'
 import { fetchMyReservations, type ReservationRow } from '@/api/reservation'
+import { fetchMyRedemptions, type RewardRedemptionResponse } from '@/api/customer'
 import { createOrder, fetchMyOrders, type OrderResponse } from '@/api/order'
 import { sandboxPay, type PaymentResponse } from '@/api/payment'
 
@@ -148,6 +171,8 @@ const remark = ref('')
 const currentOrder = ref<OrderResponse>()
 const payment = ref<PaymentResponse>()
 const orders = ref<OrderResponse[]>([])
+const redemptions = ref<RewardRedemptionResponse[]>([])
+const selectedRedemptionId = ref<number>()
 const selectedReservation = ref<ReservationRow>()
 
 const selectedItems = computed(() => categories.value
@@ -157,6 +182,8 @@ const selectedItems = computed(() => categories.value
 
 const selectedCount = computed(() => selectedItems.value.reduce((sum, item) => sum + item.quantity, 0))
 const totalAmount = computed(() => selectedItems.value.reduce((sum, item) => sum + item.subtotal, 0))
+const availableCoupons = computed(() => redemptions.value.filter((coupon) => coupon.status === 'REDEEMED' && !coupon.usedAt && !coupon.orderId))
+const payablePreview = computed(() => Number(currentOrder.value?.payableAmount ?? currentOrder.value?.totalAmount ?? totalAmount.value))
 
 async function loadStores() {
   stores.value = await fetchStores()
@@ -168,6 +195,8 @@ async function handleStoreChange() {
   if (selectedReservation.value?.storeId !== selectedStoreId.value) {
     selectedReservation.value = undefined
   }
+  currentOrder.value = undefined
+  payment.value = undefined
   await loadMenu()
 }
 
@@ -182,6 +211,17 @@ async function loadMenu() {
     ElMessage.error(error instanceof Error ? error.message : '菜单加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadRedemptions() {
+  try {
+    redemptions.value = await fetchMyRedemptions()
+    if (selectedRedemptionId.value && !availableCoupons.value.some((coupon) => coupon.id === selectedRedemptionId.value)) {
+      selectedRedemptionId.value = undefined
+    }
+  } catch {
+    redemptions.value = []
   }
 }
 
@@ -208,9 +248,11 @@ async function submitOrder() {
       reservationId: selectedReservation.value?.id,
       items: selectedItems.value.map((item: { dish: DishItem; quantity: number }) => ({ dishId: item.dish.id, quantity: item.quantity })),
       remark: remark.value,
+      rewardRedemptionId: selectedRedemptionId.value,
     })
     ElMessage.success('订单已创建，请继续沙箱支付')
     await loadOrders()
+    await loadRedemptions()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '创建订单失败')
   } finally {
@@ -224,8 +266,10 @@ async function payOrder() {
   try {
     payment.value = await sandboxPay(currentOrder.value.id)
     currentOrder.value = { ...currentOrder.value, status: 'PAID', canPay: false }
+    selectedRedemptionId.value = undefined
     ElMessage.success('沙箱支付成功，可在我的订单查看制作进度')
     await loadOrders()
+    await loadRedemptions()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '沙箱支付失败')
   } finally {
@@ -239,6 +283,10 @@ function formatOrderItems(order: OrderResponse) {
 
 function formatShortTime(value: string) {
   return value?.slice(0, 5) || '--:--'
+}
+
+function formatTime(value?: string) {
+  return value ? value.replace('T', ' ').slice(0, 16) : '-'
 }
 
 function getOrderStatusText(status: string) {
@@ -279,6 +327,7 @@ onMounted(async () => {
     await loadSelectedReservation()
     await loadMenu()
     await loadOrders()
+    await loadRedemptions()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '结算页加载失败')
   }
@@ -307,6 +356,14 @@ onMounted(async () => {
 .reservation-card { display: grid; gap: 4px; border-radius: 18px; padding: 14px; background: rgba(217, 119, 6, 0.09); color: #5d3922; }
 .reservation-card span, .reservation-card small { color: #7c5f4a; }
 .reservation-card strong { color: #3b2618; }
+.coupon-card { display: grid; gap: 10px; border-radius: 18px; padding: 14px; background: rgba(111, 148, 93, 0.1); color: #4b6040; }
+.coupon-card p { margin: 0; color: #6b8060; font-size: 13px; }
+.coupon-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-weight: 900; }
+.amount-lines { display: grid; gap: 8px; padding: 12px 0; border-top: 1px dashed #f0cfaa; border-bottom: 1px dashed #f0cfaa; }
+.amount-lines div { display: flex; justify-content: space-between; gap: 12px; color: #6b4d37; }
+.amount-lines .discount { color: #537245; }
+.amount-lines .payable { color: #3b2618; font-size: 18px; }
+.amount-lines .payable strong { color: #d97706; }
 .summary-item { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px dashed #f0cfaa; padding-bottom: 8px; color: #5d3922; }
 .result-card { display: grid; gap: 4px; border-radius: 18px; padding: 14px; background: rgba(217, 119, 6, 0.09); color: #5d3922; }
 .result-card strong { color: #d97706; font-size: 18px; }

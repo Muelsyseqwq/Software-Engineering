@@ -18,6 +18,10 @@ public class FoodOrder {
     private Long reservationId;
     private Long tableId;
     private BigDecimal totalAmount;
+    private Long rewardRedemptionId;
+    private BigDecimal couponDiscountAmount;
+    private BigDecimal payableAmount;
+    private String couponName;
     private String status;
     private String refundStatus;
     private String remark;
@@ -44,6 +48,14 @@ public class FoodOrder {
     public void setTableId(Long tableId) { this.tableId = tableId; }
     public BigDecimal getTotalAmount() { return totalAmount; }
     public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
+    public Long getRewardRedemptionId() { return rewardRedemptionId; }
+    public void setRewardRedemptionId(Long rewardRedemptionId) { this.rewardRedemptionId = rewardRedemptionId; }
+    public BigDecimal getCouponDiscountAmount() { return couponDiscountAmount; }
+    public void setCouponDiscountAmount(BigDecimal couponDiscountAmount) { this.couponDiscountAmount = couponDiscountAmount; }
+    public BigDecimal getPayableAmount() { return payableAmount; }
+    public void setPayableAmount(BigDecimal payableAmount) { this.payableAmount = payableAmount; }
+    public String getCouponName() { return couponName; }
+    public void setCouponName(String couponName) { this.couponName = couponName; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getRefundStatus() { return refundStatus; }

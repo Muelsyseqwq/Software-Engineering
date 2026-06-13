@@ -14,6 +14,7 @@ public class RewardCatalog {
     private String name;
     private String description;
     private Integer pointsCost;
+    private java.math.BigDecimal discountAmount;
     private String rewardType;
     private String coverUrl;
     private Integer stock;
@@ -32,6 +33,8 @@ public class RewardCatalog {
     public void setDescription(String description) { this.description = description; }
     public Integer getPointsCost() { return pointsCost; }
     public void setPointsCost(Integer pointsCost) { this.pointsCost = pointsCost; }
+    public java.math.BigDecimal getDiscountAmount() { return discountAmount; }
+    public void setDiscountAmount(java.math.BigDecimal discountAmount) { this.discountAmount = discountAmount; }
     public String getRewardType() { return rewardType; }
     public void setRewardType(String rewardType) { this.rewardType = rewardType; }
     public String getCoverUrl() { return coverUrl; }

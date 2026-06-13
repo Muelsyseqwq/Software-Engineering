@@ -45,6 +45,7 @@ export interface RewardCatalogResponse {
   name: string
   description?: string
   pointsCost: number
+  discountAmount?: number
   rewardType: 'COUPON' | 'SERVICE' | 'ITEM' | string
   coverUrl?: string
   stock?: number | null
@@ -57,6 +58,7 @@ export interface RewardRedemptionResponse {
   id: number
   redemptionNo: string
   rewardId: number
+  orderId?: number
   rewardName: string
   pointsCost: number
   status: string

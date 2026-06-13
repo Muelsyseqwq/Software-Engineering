@@ -35,24 +35,29 @@ public class ReservationService {
     private final ReservationMapper reservationMapper;
     private final StoreMapper storeMapper;
     private final DiningTableMapper diningTableMapper;
+    private final ReservationSlotGenerator slotGenerator;
 
     public ReservationService(
         ReservationSlotMapper slotMapper,
         ReservationMapper reservationMapper,
         StoreMapper storeMapper,
-        DiningTableMapper diningTableMapper
+        DiningTableMapper diningTableMapper,
+        ReservationSlotGenerator slotGenerator
     ) {
         this.slotMapper = slotMapper;
         this.reservationMapper = reservationMapper;
         this.storeMapper = storeMapper;
         this.diningTableMapper = diningTableMapper;
+        this.slotGenerator = slotGenerator;
     }
 
     public List<ReservationSlotResponse> slots(Long storeId, LocalDate date, Integer partySize) {
         if (storeId == null || date == null || partySize == null || partySize <= 0) {
             throw new BizException(2101, "请选择门店、日期和预约人数");
         }
+        ensureDateInBookingWindow(date);
         ensureStoreOpen(storeId);
+        slotGenerator.ensureSlotsForStoreAndDate(storeId, date);
         Map<Long, DiningTable> tableMap = diningTableMapper.selectList(new LambdaQueryWrapper<DiningTable>()
                 .eq(DiningTable::getStoreId, storeId)
                 .eq(DiningTable::getDeleted, 0)
@@ -103,6 +108,7 @@ public class ReservationService {
         if (slot == null) {
             throw new BizException(2104, "预约时段不存在");
         }
+        ensureDateInBookingWindow(slot.getSlotDate());
         if (slot.getAvailableCount() == null || slot.getAvailableCount() <= 0) {
             throw new BizException(2105, "该时段已约满");
         }
@@ -214,6 +220,13 @@ public class ReservationService {
             slot.getAvailableCount(),
             slot.getStatus()
         );
+    }
+
+    private void ensureDateInBookingWindow(LocalDate date) {
+        LocalDate today = LocalDate.now();
+        if (date == null || date.isBefore(today) || date.isAfter(today.plusDays(6))) {
+            throw new BizException(2111, "仅支持预约今天起 7 天内的时段");
+        }
     }
 
     private Store ensureStoreOpen(Long storeId) {

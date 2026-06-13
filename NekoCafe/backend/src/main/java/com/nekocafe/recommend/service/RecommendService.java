@@ -20,6 +20,8 @@ import com.nekocafe.order.entity.FoodOrderItem;
 import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
 import com.nekocafe.recommend.ai.RecommendationReasonGenerator;
+import com.nekocafe.recommend.dto.RecommendationCatFeedResponse;
+import com.nekocafe.recommend.dto.RecommendationCatItem;
 import com.nekocafe.recommend.dto.RecommendationFeedResponse;
 import com.nekocafe.recommend.dto.RecommendationHighlight;
 import com.nekocafe.recommend.dto.RecommendationStoreItem;
@@ -90,6 +92,48 @@ public class RecommendService {
         this.orderItemMapper = orderItemMapper;
         this.reviewMapper = reviewMapper;
         this.reasonGenerator = reasonGenerator;
+    }
+
+    public RecommendationCatFeedResponse customerCatRecommendations(Long userId, Long storeId, Integer limit) {
+        int max = Math.min(Math.max(limit == null ? 3 : limit, 1), 3);
+        List<Store> stores = storeMapper.selectList(new LambdaQueryWrapper<Store>()
+            .eq(Store::getDeleted, 0)
+            .eq(Store::getStatus, OPEN)
+            .orderByAsc(Store::getId));
+        if (storeId != null) {
+            stores = stores.stream().filter(store -> storeId.equals(store.getId())).toList();
+        }
+        if (stores.isEmpty()) {
+            return new RecommendationCatFeedResponse(LocalDateTime.now(), "暂时没有营业门店可推荐猫咪，稍后再来看看吧。", List.of());
+        }
+        List<Long> storeIds = stores.stream().map(Store::getId).toList();
+        Map<Long, Store> storeMap = stores.stream().collect(Collectors.toMap(Store::getId, Function.identity(), (left, right) -> left));
+        List<String> preferences = loadPreferences(userId);
+        List<Long> preferredStoreIds = loadPreferredStoreIds(userId);
+        List<Cat> cats = catMapper.selectList(new LambdaQueryWrapper<Cat>()
+            .in(Cat::getStoreId, storeIds)
+            .eq(Cat::getDeleted, 0)
+            .eq(Cat::getStatus, AVAILABLE)
+            .orderByAsc(Cat::getStoreId)
+            .orderByAsc(Cat::getId));
+        if (cats.isEmpty()) {
+            return new RecommendationCatFeedResponse(LocalDateTime.now(), "当前营业门店暂无可推荐猫咪，稍后再来看看吧。", List.of());
+        }
+        List<ScoredCat> scored = cats.stream()
+            .map(cat -> scoreCat(cat, storeMap.get(cat.getStoreId()), preferences, preferredStoreIds))
+            .sorted(Comparator.comparingInt(ScoredCat::score).reversed()
+                .thenComparing(scoredCat -> scoredCat.cat().getId()))
+            .limit(max)
+            .toList();
+        List<RecommendationCatItem> items = new ArrayList<>();
+        for (int i = 0; i < scored.size(); i++) {
+            items.add(toCatItem(i + 1, scored.get(i)));
+        }
+        items = reasonGenerator.enhanceCatReasons(items, preferences);
+        String summary = items.isEmpty()
+            ? "暂时没有生成猫咪推荐，完善会员偏好或稍后再试。"
+            : "结合你的会员偏好、猫咪性格标签和门店营业状态，为你生成了 " + items.size() + " 条性格匹配猫咪推荐。";
+        return new RecommendationCatFeedResponse(LocalDateTime.now(), summary, items);
     }
 
     public RecommendationFeedResponse customerRecommendations(Long userId, BigDecimal latitude, BigDecimal longitude, Integer limit) {
@@ -239,6 +283,75 @@ public class RecommendService {
         }
 
         return new ScoredStore(store, score, distanceKm, List.copyOf(tags), finalReasons, dishHighlights, catHighlights, activityHighlights);
+    }
+
+    private ScoredCat scoreCat(Cat cat, Store store, List<String> preferences, List<Long> preferredStoreIds) {
+        int score = 0;
+        Set<String> tags = new LinkedHashSet<>();
+        List<String> reasons = new ArrayList<>();
+        if (store != null && OPEN.equals(store.getStatus())) {
+            score += 20;
+            tags.add("门店营业中");
+            reasons.add("它所在的门店当前营业中，适合直接预约到店互动。");
+        }
+        if (AVAILABLE.equals(cat.getStatus())) {
+            score += 30;
+            tags.add("可互动");
+        }
+        int personalityMatches = countTextMatches(safe(cat.getPersonality()) + " " + safe(cat.getDescription()), preferences);
+        if (personalityMatches > 0) {
+            score += Math.min(36, personalityMatches * 12);
+            tags.add("性格匹配");
+            reasons.add("它的性格标签与你的会员偏好匹配，更可能带来合拍的猫咖体验。");
+        }
+        int interactMatches = countTextMatches(safe(cat.getInteract()), preferences);
+        if (interactMatches > 0) {
+            score += Math.min(24, interactMatches * 8);
+            tags.add("互动偏好匹配");
+            reasons.add("它的互动建议与你偏好的体验方式接近，适合优先安排互动。");
+        }
+        if (isHealthy(cat.getHealthStatus())) {
+            score += 10;
+            tags.add("健康状态稳定");
+        }
+        if (preferredStoreIds.contains(cat.getStoreId())) {
+            score += 8;
+            tags.add("熟悉门店");
+            reasons.add("你过去在这家门店有消费或评价记录，系统优先推荐熟悉场景中的猫咪。");
+        }
+        if (cat.getBreed() != null && !cat.getBreed().isBlank()) {
+            tags.add(cat.getBreed());
+        }
+        if (cat.getPersonality() != null && !cat.getPersonality().isBlank()) {
+            reasons.add("性格关键词：" + cat.getPersonality() + "。");
+        }
+        List<String> finalReasons = reasons.stream().distinct().limit(4).toList();
+        if (finalReasons.isEmpty()) {
+            finalReasons = List.of("系统根据猫咪状态、性格资料和门店营业情况，为你生成了这条基础推荐。");
+        }
+        return new ScoredCat(cat, store, score, List.copyOf(tags), finalReasons);
+    }
+
+    private RecommendationCatItem toCatItem(int rank, ScoredCat scored) {
+        Cat cat = scored.cat();
+        Store store = scored.store();
+        return new RecommendationCatItem(
+            rank,
+            cat.getId(),
+            cat.getName(),
+            cat.getBreed(),
+            cat.getPhotoUrl(),
+            cat.getStoreId(),
+            store == null ? "未知门店" : store.getName(),
+            cat.getPersonality(),
+            cat.getInteract(),
+            cat.getHealthStatus(),
+            cat.getStatus(),
+            scored.score(),
+            scored.tags(),
+            scored.reasons(),
+            store != null && OPEN.equals(store.getStatus()) ? "预约这家店" : "查看门店"
+        );
     }
 
     private RecommendationStoreItem toItem(int rank, ScoredStore scored) {
@@ -441,6 +554,21 @@ public class RecommendService {
         return matches;
     }
 
+    private int countTextMatches(String text, List<String> preferences) {
+        if (preferences.isEmpty() || text == null || text.isBlank()) {
+            return 0;
+        }
+        String searchable = text.toLowerCase(Locale.ROOT);
+        int matches = 0;
+        for (String preference : preferences) {
+            String normalized = preference == null ? "" : preference.trim().toLowerCase(Locale.ROOT);
+            if (!normalized.isBlank() && searchable.contains(normalized)) {
+                matches++;
+            }
+        }
+        return matches;
+    }
+
     private int countHistoryMatches(List<Dish> dishes, Set<String> historyKeywords) {
         if (historyKeywords.isEmpty()) {
             return 0;
@@ -512,8 +640,22 @@ public class RecommendService {
         return String.join(" · ", parts);
     }
 
+    private boolean isHealthy(String healthStatus) {
+        String normalized = healthStatus == null ? "" : healthStatus.toUpperCase(Locale.ROOT);
+        return normalized.isBlank() || List.of("HEALTHY", "NORMAL", "GOOD", "健康", "正常").contains(normalized);
+    }
+
     private String safe(String value) {
         return value == null ? "" : value;
+    }
+
+    private record ScoredCat(
+        Cat cat,
+        Store store,
+        int score,
+        List<String> tags,
+        List<String> reasons
+    ) {
     }
 
     private record ScoredStore(

@@ -3,6 +3,7 @@ package com.nekocafe.recommend.controller;
 import com.nekocafe.common.result.ApiResult;
 import com.nekocafe.recommend.ai.AiReasonProperties;
 import com.nekocafe.recommend.ai.RecommendationReasonGenerator;
+import com.nekocafe.recommend.dto.RecommendationCatFeedResponse;
 import com.nekocafe.recommend.dto.RecommendationFeedResponse;
 import com.nekocafe.recommend.service.RecommendService;
 import com.nekocafe.security.AuthPrincipal;
@@ -62,5 +63,15 @@ public class RecommendController {
         @RequestParam(required = false) Integer limit
     ) {
         return ApiResult.ok(recommendService.customerRecommendations(principal.userId(), lat, lng, limit));
+    }
+
+    @GetMapping("/customer/cats")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResult<RecommendationCatFeedResponse> customerCatRecommendations(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @RequestParam(required = false) Long storeId,
+        @RequestParam(required = false) Integer limit
+    ) {
+        return ApiResult.ok(recommendService.customerCatRecommendations(principal.userId(), storeId, limit));
     }
 }
