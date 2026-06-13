@@ -36,6 +36,9 @@ public class OrderService {
     private static final String PREPARING = "PREPARING";
     private static final String COMPLETED = "COMPLETED";
     private static final String NONE = "NONE";
+    private static final String CANCELLED = "CANCELLED";
+    private static final String RESERVED_STATUS = "RESERVED";
+    private static final String CHECKED_IN = "CHECKED_IN";
 
     private final FoodOrderMapper orderMapper;
     private final FoodOrderItemMapper orderItemMapper;
@@ -91,6 +94,8 @@ public class OrderService {
                 throw new BizException(3003, "预约记录不存在或不属于当前账号");
             }
         }
+
+        validateReservationCanBeUsedForOrder(reservation);
 
         List<Long> dishIds = request.items().stream().map(CreateOrderItemRequest::dishId).distinct().toList();
         Map<Long, Dish> dishMap = dishMapper.selectBatchIds(dishIds).stream()
@@ -232,6 +237,59 @@ public class OrderService {
             .eq(Review::getUserId, userId)
             .eq(Review::getOrderId, orderId)
             .eq(Review::getDeleted, 0)) > 0;
+    }
+
+    private void validateReservationCanBeUsedForOrder(Reservation reservation) {
+        if (reservation == null) {
+            return;
+        }
+        if (!List.of(RESERVED_STATUS, CHECKED_IN).contains(reservation.getStatus())) {
+            throw new BizException(3009, "当前预约状态不可下单");
+        }
+    }
+
+    public void validateReservationCanBePaid(FoodOrder order) {
+        if (order == null || order.getReservationId() == null) {
+            return;
+        }
+        Reservation reservation = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
+            .eq(Reservation::getId, order.getReservationId())
+            .eq(Reservation::getUserId, order.getUserId())
+            .eq(Reservation::getStoreId, order.getStoreId())
+            .eq(Reservation::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (reservation == null || !List.of(RESERVED_STATUS, CHECKED_IN).contains(reservation.getStatus())) {
+            throw new BizException(3010, "关联预约已不可支付");
+        }
+    }
+
+    public boolean hasPaidOrActiveOrdersForReservation(Long userId, Long reservationId) {
+        if (userId == null || reservationId == null) {
+            return false;
+        }
+        return orderMapper.selectCount(new LambdaQueryWrapper<FoodOrder>()
+            .eq(FoodOrder::getUserId, userId)
+            .eq(FoodOrder::getReservationId, reservationId)
+            .eq(FoodOrder::getDeleted, 0)
+            .in(FoodOrder::getStatus, List.of(PAID, PREPARING, COMPLETED))) > 0;
+    }
+
+    @Transactional
+    public void cancelCreatedOrdersForReservation(Long userId, Long reservationId) {
+        if (userId == null || reservationId == null) {
+            return;
+        }
+        List<FoodOrder> orders = orderMapper.selectList(new LambdaQueryWrapper<FoodOrder>()
+            .eq(FoodOrder::getUserId, userId)
+            .eq(FoodOrder::getReservationId, reservationId)
+            .eq(FoodOrder::getDeleted, 0)
+            .eq(FoodOrder::getStatus, CREATED));
+        for (FoodOrder order : orders) {
+            rewardRedemptionService.releaseLockedForOrder(order);
+            order.setStatus(CANCELLED);
+            order.setCancelledAt(LocalDateTime.now());
+            orderMapper.updateById(order);
+        }
     }
 
     private String normalizeRefundStatus(String status) {

@@ -18,6 +18,12 @@ export interface CustomerActivityResponse {
   coverUrl?: string
   startAt: string
   endAt: string
+  rewardId?: number | null
+  rewardName?: string | null
+  rewardType?: string | null
+  discountAmount?: number | null
+  claimable?: boolean
+  claimStatus?: 'NO_REWARD' | 'AVAILABLE' | 'CLAIMED' | 'UNAVAILABLE' | string
   stores: ActivityStoreResponse[]
 }
 
@@ -47,6 +53,7 @@ export interface RewardCatalogResponse {
   pointsCost: number
   discountAmount?: number
   rewardType: 'COUPON' | 'SERVICE' | 'ITEM' | string
+  requiredLevel?: 'NORMAL' | 'VIP' | 'SVIP' | string
   coverUrl?: string
   stock?: number | null
   status: string
@@ -193,5 +200,10 @@ export async function applyRefund(orderId: number, payload: RefundRequestPayload
 
 export async function fetchMyRefunds() {
   const { data } = await http.get<ApiResult<RefundResponse[]>>('/customer/refunds/me')
+  return data.data
+}
+
+export async function claimActivityReward(activityId: number) {
+  const { data } = await http.post<ApiResult<RewardRedemptionResponse>>(`/customer/activities/${activityId}/claim`)
   return data.data
 }

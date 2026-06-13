@@ -21,6 +21,7 @@ public class PaymentService {
     private static final String SANDBOX = "SANDBOX";
     private static final String SUCCESS = "SUCCESS";
     private static final String PAID = "PAID";
+    private static final String CREATED = "CREATED";
 
     private final PaymentRecordMapper paymentRecordMapper;
     private final OrderService orderService;
@@ -56,7 +57,12 @@ public class PaymentService {
                 customerService.awardPointsForPaidOrder(order);
                 return toResponse(existing);
             }
+            throw new BizException(3102, "当前订单状态不可支付");
         }
+        if (!CREATED.equals(order.getStatus())) {
+            throw new BizException(3102, "当前订单状态不可支付");
+        }
+        orderService.validateReservationCanBePaid(order);
 
         String key = normalizeOptional(request.idempotencyKey());
         if (key == null) {

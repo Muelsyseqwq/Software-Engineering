@@ -96,13 +96,21 @@ public class StaffService {
             return Collections.emptyList();
         }
 
-        LocalDateTime todayStart = LocalDateTime.of(LocalDate.now(), LocalTime.MIN);
-        LocalDateTime todayEnd = LocalDateTime.of(LocalDate.now(), LocalTime.MAX);
+        LocalDate today = LocalDate.now();
+        List<ReservationSlot> todaySlots = reservationSlotMapper.selectList(new LambdaQueryWrapper<ReservationSlot>()
+            .in(ReservationSlot::getStoreId, storeIds)
+            .eq(ReservationSlot::getSlotDate, today));
+        if (todaySlots.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Long> todaySlotIds = todaySlots.stream().map(ReservationSlot::getId).distinct().toList();
+        Map<Long, ReservationSlot> preloadedSlotMap = todaySlots.stream()
+            .collect(Collectors.toMap(ReservationSlot::getId, s -> s));
 
         LambdaQueryWrapper<Reservation> wrapper = new LambdaQueryWrapper<Reservation>()
             .eq(Reservation::getDeleted, 0)
             .in(Reservation::getStoreId, storeIds)
-            .between(Reservation::getCreatedAt, todayStart, todayEnd)
+            .in(Reservation::getSlotId, todaySlotIds)
             .orderByDesc(Reservation::getCreatedAt);
 
         List<Reservation> list = reservationMapper.selectList(wrapper);
@@ -110,14 +118,7 @@ public class StaffService {
             return Collections.emptyList();
         }
 
-        List<Long> slotIds = list.stream().map(Reservation::getSlotId).filter(Objects::nonNull).distinct().toList();
-        final Map<Long, ReservationSlot> slotMap;
-        if (!slotIds.isEmpty()) {
-            List<ReservationSlot> slots = reservationSlotMapper.selectBatchIds(slotIds);
-            slotMap = slots.stream().collect(Collectors.toMap(ReservationSlot::getId, s -> s));
-        } else {
-            slotMap = Collections.emptyMap();
-        }
+        final Map<Long, ReservationSlot> slotMap = preloadedSlotMap;
 
         List<Long> tableIds = list.stream().map(Reservation::getTableId).filter(Objects::nonNull).distinct().toList();
         final Map<Long, DiningTable> tableMap;
