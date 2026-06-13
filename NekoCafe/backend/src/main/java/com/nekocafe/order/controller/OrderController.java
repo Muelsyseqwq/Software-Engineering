@@ -8,6 +8,7 @@ import com.nekocafe.security.AuthPrincipal;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -41,5 +42,11 @@ public class OrderController {
     @PreAuthorize("hasRole('CUSTOMER')")
     public ApiResult<List<OrderResponse>> mine(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResult.ok(orderService.mine(principal.userId()));
+    }
+
+    @PostMapping("/{id}/cancel")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ApiResult<OrderResponse> cancel(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        return ApiResult.ok(orderService.cancelOrder(principal.userId(), id));
     }
 }

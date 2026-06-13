@@ -50,6 +50,7 @@ export interface OrderResponse {
   canRefund?: boolean
   canReview?: boolean
   reviewed?: boolean
+  canCancel?: boolean
   items: OrderItemResponse[]
 }
 
@@ -60,5 +61,10 @@ export async function createOrder(payload: CreateOrderRequest) {
 
 export async function fetchMyOrders() {
   const { data } = await http.get<ApiResult<OrderResponse[]>>('/order/me')
+  return data.data
+}
+
+export async function cancelOrder(id: number) {
+  const { data } = await http.post<ApiResult<OrderResponse>>(`/order/${id}/cancel`)
   return data.data
 }

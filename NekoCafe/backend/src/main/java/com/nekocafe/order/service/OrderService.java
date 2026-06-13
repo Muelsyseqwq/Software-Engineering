@@ -225,6 +225,7 @@ public class OrderService {
             (PAID.equals(order.getStatus()) || PREPARING.equals(order.getStatus())) && NONE.equals(refundStatus),
             COMPLETED.equals(order.getStatus()) && !reviewed,
             reviewed,
+            CREATED.equals(order.getStatus()),
             items
         );
     }
@@ -272,6 +273,19 @@ public class OrderService {
             .eq(FoodOrder::getReservationId, reservationId)
             .eq(FoodOrder::getDeleted, 0)
             .in(FoodOrder::getStatus, List.of(PAID, PREPARING, COMPLETED))) > 0;
+    }
+
+    @Transactional
+    public OrderResponse cancelOrder(Long userId, Long orderId) {
+        FoodOrder order = getOwnedOrder(userId, orderId);
+        if (!CREATED.equals(order.getStatus())) {
+            throw new BizException(3011, "只有待支付订单可以直接取消，已支付订单请申请退款");
+        }
+        rewardRedemptionService.releaseLockedForOrder(order);
+        order.setStatus(CANCELLED);
+        order.setCancelledAt(LocalDateTime.now());
+        orderMapper.updateById(order);
+        return toResponse(order, storeMapper.selectById(order.getStoreId()), loadItems(order.getId()));
     }
 
     @Transactional
@@ -353,6 +367,7 @@ public class OrderService {
         boolean canRefund,
         boolean canReview,
         boolean reviewed,
+        boolean canCancel,
         List<OrderItemResponse> items
     ) {
     }
