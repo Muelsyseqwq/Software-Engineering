@@ -72,9 +72,12 @@
           <el-input v-model="form.description" type="textarea" :rows="3" placeholder="活动详细描述" />
         </el-form-item>
         <el-form-item label="发放优惠券">
-          <el-select v-model="form.rewardId" placeholder="选择要发放的优惠券（可选）" clearable style="width:100%">
-            <el-option v-for="r in rewards" :key="r.id" :label="`${r.name}（${r.rewardType === 'COUPON' ? '优惠券' : r.rewardType}）`" :value="r.id" />
-          </el-select>
+          <div style="display:flex;gap:8px;width:100%">
+            <el-select v-model="form.rewardId" placeholder="选择要发放的优惠券（可选）" clearable style="flex:1">
+              <el-option v-for="r in rewards" :key="r.id" :label="`${r.name}（${r.rewardType === 'COUPON' ? '优惠券' : r.rewardType}）`" :value="r.id" />
+            </el-select>
+            <el-button size="default" @click="openCreateReward">新建优惠券</el-button>
+          </div>
         </el-form-item>
         <el-row :gutter="12">
           <el-col :span="12">
@@ -92,6 +95,40 @@
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Create Reward dialog -->
+    <el-dialog v-model="rewardDialogVisible" title="新建优惠券" width="480px">
+      <el-form :model="rewardForm" label-position="top">
+        <el-form-item label="优惠券名称" required>
+          <el-input v-model="rewardForm.name" placeholder="如：满50减10优惠券" />
+        </el-form-item>
+        <el-form-item label="优惠金额（元）" required>
+          <el-input-number v-model="rewardForm.discountAmount" :min="0" :precision="2" style="width:100%" placeholder="如：10.00" />
+        </el-form-item>
+        <el-form-item label="描述">
+          <el-input v-model="rewardForm.description" type="textarea" :rows="2" placeholder="优惠券使用说明" />
+        </el-form-item>
+        <el-form-item label="库存数量">
+          <el-input-number v-model="rewardForm.stock" :min="1" style="width:100%" placeholder="留空表示不限量" />
+        </el-form-item>
+        <el-row :gutter="12">
+          <el-col :span="12">
+            <el-form-item label="有效期开始">
+              <el-date-picker v-model="rewardForm.validFrom" type="datetime" placeholder="选择时间" style="width:100%" />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="有效期结束">
+              <el-date-picker v-model="rewardForm.validTo" type="datetime" placeholder="选择时间" style="width:100%" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      <template #footer>
+        <el-button @click="rewardDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="rewardCreating" @click="handleCreateReward">创建并选择</el-button>
       </template>
     </el-dialog>
 
@@ -134,8 +171,9 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   fetchActivities, createActivity, updateActivity, deleteActivity,
   publishActivity, fetchActivityStores, fetchActivityRewards,
+  createActivityReward,
   type ActivityRow, type CreateActivityRequest, type StoreAcceptanceRow,
-  type RewardOption,
+  type RewardOption, type CreateRewardRequest,
 } from '@/api/activity'
 import { fetchAdminStores, type AdminStoreRow } from '@/api/admin'
 
@@ -160,6 +198,11 @@ const publishStoreIds = ref<number[]>([])
 const acceptanceVisible = ref(false)
 const acceptanceList = ref<StoreAcceptanceRow[]>([])
 
+// Create Reward
+const rewardDialogVisible = ref(false)
+const rewardCreating = ref(false)
+const rewardForm = reactive<CreateRewardRequest>({ name: '', discountAmount: undefined, description: '', stock: undefined, validFrom: undefined, validTo: undefined })
+
 onMounted(() => { loadData(); loadStores(); loadRewards() })
 
 async function loadData() {
@@ -177,6 +220,36 @@ async function loadStores() {
 
 async function loadRewards() {
   try { rewards.value = await fetchActivityRewards() } catch { /* silent */ }
+}
+
+function openCreateReward() {
+  Object.assign(rewardForm, { name: '', discountAmount: undefined, description: '', stock: undefined, validFrom: undefined, validTo: undefined })
+  rewardDialogVisible.value = true
+}
+
+async function handleCreateReward() {
+  if (!rewardForm.name) { ElMessage.warning('请输入优惠券名称'); return }
+  if (!rewardForm.discountAmount && rewardForm.discountAmount !== 0) { ElMessage.warning('请输入优惠金额'); return }
+  rewardCreating.value = true
+  try {
+    const payload: CreateRewardRequest = {
+      name: rewardForm.name,
+      description: rewardForm.description,
+      discountAmount: rewardForm.discountAmount,
+      stock: rewardForm.stock,
+    }
+    if (rewardForm.validFrom) payload.validFrom = typeof rewardForm.validFrom === 'string' ? rewardForm.validFrom : (rewardForm.validFrom as Date).toISOString()
+    if (rewardForm.validTo) payload.validTo = typeof rewardForm.validTo === 'string' ? rewardForm.validTo : (rewardForm.validTo as Date).toISOString()
+
+    const created = await createActivityReward(payload)
+    ElMessage.success(`优惠券「${created.name}」已创建`)
+    rewardDialogVisible.value = false
+    await loadRewards()
+    // Auto-select the newly created coupon
+    form.rewardId = created.id
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : '创建优惠券失败')
+  } finally { rewardCreating.value = false }
 }
 
 function resetForm() {

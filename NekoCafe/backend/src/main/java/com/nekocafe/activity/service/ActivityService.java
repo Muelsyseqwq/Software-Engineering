@@ -219,6 +219,29 @@ public class ActivityService {
 
     public record RewardOption(Long id, String name, String rewardType) {}
 
+    public record CreateRewardRequest(String name, String description,
+                                       java.math.BigDecimal discountAmount, Integer pointsCost,
+                                       Integer stock, LocalDateTime validFrom, LocalDateTime validTo,
+                                       String coverUrl) {}
+
+    @Transactional
+    public RewardOption createReward(CreateRewardRequest request) {
+        RewardCatalog reward = new RewardCatalog();
+        reward.setName(request.name());
+        reward.setDescription(request.description());
+        reward.setDiscountAmount(request.discountAmount());
+        reward.setPointsCost(request.pointsCost() != null ? request.pointsCost() : 0);
+        reward.setStock(request.stock());
+        reward.setValidFrom(request.validFrom());
+        reward.setValidTo(request.validTo());
+        reward.setCoverUrl(request.coverUrl());
+        reward.setRewardType("COUPON");
+        reward.setStatus("ACTIVE");
+        reward.setDeleted(0);
+        rewardCatalogMapper.insert(reward);
+        return new RewardOption(reward.getId(), reward.getName(), reward.getRewardType());
+    }
+
     public List<RewardOption> listRewardOptions() {
         return rewardCatalogMapper.selectList(new LambdaQueryWrapper<RewardCatalog>()
                         .eq(RewardCatalog::getDeleted, 0)
