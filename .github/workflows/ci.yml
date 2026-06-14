@@ -153,11 +153,61 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           port: ${{ secrets.SERVER_PORT }}
           envs: DEPLOY_PATH,BACKEND_IMAGE,FRONTEND_IMAGE
+          command_timeout: 30m
           script: |
             set -eu
 
+            pull_with_retry() {
+              attempt=1
+              max_attempts=3
+              while [ "$attempt" -le "$max_attempts" ]; do
+                echo "Pulling Docker images (attempt ${attempt}/${max_attempts})..."
+                if command -v timeout >/dev/null 2>&1; then
+                  if timeout 8m docker compose pull; then
+                    return 0
+                  fi
+                else
+                  if docker compose pull; then
+                    return 0
+                  fi
+                fi
+
+                echo "Docker image pull failed or timed out on attempt ${attempt}."
+                if [ "$attempt" -lt "$max_attempts" ]; then
+                  sleep_seconds=$((attempt * 20))
+                  echo "Retrying in ${sleep_seconds}s..."
+                  sleep "$sleep_seconds"
+                fi
+                attempt=$((attempt + 1))
+              done
+
+              echo "Docker image pull failed after ${max_attempts} attempts."
+              return 1
+            }
+
+            wait_for_url() {
+              url="$1"
+              name="$2"
+              attempt=1
+              max_attempts=24
+              while [ "$attempt" -le "$max_attempts" ]; do
+                if curl -fsS "$url" >/dev/null; then
+                  echo "${name} is healthy."
+                  return 0
+                fi
+                echo "Waiting for ${name} (${attempt}/${max_attempts})..."
+                sleep 5
+                attempt=$((attempt + 1))
+              done
+              echo "${name} did not become healthy in time."
+              return 1
+            }
+
             mkdir -p "$DEPLOY_PATH"
             cd "$DEPLOY_PATH"
+
+            docker version
+            docker compose version
 
             if [ ! -f .env ]; then
               cat > .env.example <<'ENVEXAMPLE'
@@ -250,10 +300,13 @@ jobs:
               backend-uploads:
             COMPOSE
 
-            docker compose pull
+            echo "Backend image: ${BACKEND_IMAGE}"
+            echo "Frontend image: ${FRONTEND_IMAGE}"
+
+            pull_with_retry
             docker compose up -d --remove-orphans
             docker image prune -f
 
             docker compose ps
-            curl -fsS http://127.0.0.1:8080/actuator/health
-            curl -fsS http://127.0.0.1/
+            wait_for_url http://127.0.0.1:8080/actuator/health backend
+            wait_for_url http://127.0.0.1/ frontend
