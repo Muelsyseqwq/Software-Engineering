@@ -224,7 +224,7 @@ npm run build
 
 CD，即 Continuous Deployment，持续部署。
 
-在本项目中，CD 的作用是：当代码通过审核并合并到 `main` 后，自动部署到阿里云服务器。
+在本项目中，CD 的作用是：当代码通过审核并合并到 `main` 后，自动构建 Docker 镜像并部署到阿里云服务器。服务器已有数据库和运行配置，部署过程只更新应用镜像并重启容器，不重建或清空数据库。
 
 ### 6.1 CD 触发时机
 
@@ -236,7 +236,7 @@ push 到 main 分支
 
 Pull Request 阶段只执行测试和构建，不执行部署。
 
-GitHub Actions 中应使用类似条件限制部署：
+GitHub Actions 中使用条件限制部署：
 
 ```yaml
 if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -247,187 +247,79 @@ if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 部署内容包括：
 
 ```text
-1. 构建后端 jar 包
-2. 构建前端 dist 静态资源
-3. 上传 jar 包到阿里云服务器
-4. 上传 dist 文件到 Nginx 静态目录
-5. 重启 Spring Boot 后端服务
-6. 重载或重启 Nginx
+1. 构建后端 Docker 镜像
+2. 构建前端 Docker 镜像
+3. 推送镜像到 GitHub Container Registry（GHCR）
+4. 通过 SSH 登录服务器
+5. 在服务器部署目录更新 docker-compose.yml 中的镜像标签
+6. 执行 docker compose pull
+7. 执行 docker compose up -d --remove-orphans
+8. 通过健康检查确认服务可用
 ```
 
 ### 6.3 推荐服务器目录
 
-阿里云服务器推荐目录：
+阿里云服务器推荐部署目录：
 
 ```text
-/opt/nekocafe/backend/       后端 jar 存放目录
-/var/www/nekocafe/           前端 dist 静态资源目录
-/opt/nekocafe/upload/        CI/CD 临时上传目录
+/opt/nekocafe/
+├── .env                 服务器生产环境变量，不提交到 Git
+└── docker-compose.yml   CI/CD 自动写入或更新
 ```
+
+`.env` 中保存数据库、JWT、端口等运行配置。CI/CD 不覆盖 `.env`。
 
 ### 6.4 推荐服务结构
 
 ```text
 阿里云 ECS
-├── Nginx
-│   ├── 托管 Vue 前端静态文件
-│   └── 将 /api 请求反向代理到后端
-│
-├── Spring Boot 后端
-│   └── 运行在 8080 端口
+├── Docker Compose
+│   ├── nekocafe-frontend  Vue/Nginx 前端，监听 80
+│   ├── nekocafe-backend   Spring Boot 后端，监听 8080
+│   └── nekocafe-redis     Redis 缓存
 │
 └── MySQL
-    └── 使用阿里云 RDS 或服务器本机 MySQL
+    └── 使用服务器已有数据库或外部数据库
 ```
 
-## 7. GitHub Actions 示例配置
+## 7. GitHub Actions 配置规范
 
-建议在仓库中创建：
+仓库根目录的实际 workflow 文件为：
 
 ```text
-.github/workflows/ci-cd.yml
+.github/workflows/ci.yml
 ```
 
-示例配置如下：
+该 workflow 包含四类任务：
 
-```yaml
-name: NekoCafe CI/CD
-
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
-
-jobs:
-  backend-test:
-    name: Backend Test
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: NekoCafe/backend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-          cache: maven
-
-      - name: Run backend tests
-        run: mvn test
-
-  frontend-build:
-    name: Frontend Typecheck and Build
-    runs-on: ubuntu-latest
-
-    defaults:
-      run:
-        working-directory: NekoCafe/frontend
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install frontend dependencies
-        run: npm install
-
-      - name: Run frontend typecheck
-        run: npm run typecheck
-
-      - name: Build frontend
-        run: npm run build
-
-  deploy:
-    name: Deploy to Aliyun ECS
-    runs-on: ubuntu-latest
-    needs:
-      - backend-test
-      - frontend-build
-
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-          cache: maven
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Build backend jar
-        working-directory: NekoCafe/backend
-        run: mvn clean package -DskipTests
-
-      - name: Build frontend dist
-        working-directory: NekoCafe/frontend
-        run: |
-          npm install
-          npm run build
-
-      - name: Upload backend jar to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          port: ${{ secrets.ALIYUN_PORT }}
-          source: "NekoCafe/backend/target/*.jar"
-          target: "/opt/nekocafe/upload"
-
-      - name: Upload frontend dist to server
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          port: ${{ secrets.ALIYUN_PORT }}
-          source: "NekoCafe/frontend/dist/*"
-          target: "/opt/nekocafe/upload/frontend"
-
-      - name: Restart services on server
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.ALIYUN_HOST }}
-          username: ${{ secrets.ALIYUN_USER }}
-          key: ${{ secrets.ALIYUN_SSH_KEY }}
-          port: ${{ secrets.ALIYUN_PORT }}
-          script: |
-            set -e
-
-            sudo mkdir -p /opt/nekocafe/backend
-            sudo mkdir -p /var/www/nekocafe
-
-            sudo cp /opt/nekocafe/upload/NekoCafe/backend/target/*.jar /opt/nekocafe/backend/nekocafe-backend.jar
-
-            sudo rm -rf /var/www/nekocafe/*
-            sudo cp -r /opt/nekocafe/upload/frontend/NekoCafe/frontend/dist/* /var/www/nekocafe/
-
-            sudo systemctl restart nekocafe-backend
-            sudo systemctl reload nginx
-
-            echo "NekoCafe deployed successfully."
+```text
+backend-test       后端测试
+frontend-build     前端类型检查和构建
+docker-build-push  main push 后构建并推送 GHCR 镜像
+deploy             main push 后 SSH 到服务器部署
 ```
+
+镜像命名规则：
+
+```text
+ghcr.io/<github-owner>/nekocafe-backend:<commit-sha>
+ghcr.io/<github-owner>/nekocafe-backend:latest
+ghcr.io/<github-owner>/nekocafe-frontend:<commit-sha>
+ghcr.io/<github-owner>/nekocafe-frontend:latest
+```
+
+部署时使用 commit SHA 镜像标签，便于定位和回滚；`latest` 仅作为人工查看和临时使用的便利标签。
+
+服务器部署脚本核心命令：
+
+```bash
+cd "$DEPLOY_PATH"
+docker compose pull
+docker compose up -d --remove-orphans
+docker image prune -f
+```
+
+如果服务器缺少 `$DEPLOY_PATH/.env`，部署任务会创建 `.env.example` 并失败退出，提示先在服务器上补齐生产环境变量。
 
 ## 8. GitHub Secrets 配置规范
 
@@ -442,13 +334,14 @@ Settings
   -> New repository secret
 ```
 
-建议配置：
+CI/CD 部署需要配置：
 
 ```text
-ALIYUN_HOST       阿里云服务器公网 IP
-ALIYUN_USER       SSH 用户名
-ALIYUN_PORT       SSH 端口，默认 22
-ALIYUN_SSH_KEY    SSH 私钥内容
+SERVER_HOST       服务器公网 IP 或域名
+SERVER_USER       SSH 用户名，例如 root
+SERVER_PORT       SSH 端口，默认 22
+SERVER_SSH_KEY    部署专用 SSH 私钥全文
+DEPLOY_PATH       部署目录，例如 /opt/nekocafe
 ```
 
 注意事项：
@@ -456,7 +349,8 @@ ALIYUN_SSH_KEY    SSH 私钥内容
 - 不要把 SSH 私钥提交到 Git 仓库。
 - 不要把数据库密码写到 README、代码注释或日志中。
 - 不要在 Actions 日志中打印密钥或 token。
-- 生产环境的 `JWT_SECRET`、数据库密码应通过服务器环境变量或安全配置方式管理。
+- 生产环境的 `JWT_SECRET`、数据库密码、AI API Key 应保存在服务器 `.env` 中。
+- 如果 GHCR 镜像保持私有，服务器需要提前执行 `docker login ghcr.io`；课程演示环境可将 GHCR package 设为 public，简化拉取。
 
 ## 9. main 分支保护建议
 
