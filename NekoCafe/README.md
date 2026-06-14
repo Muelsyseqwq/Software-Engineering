@@ -110,6 +110,31 @@ docker compose up --build -d backend frontend
 
 > 安全提醒：`.env.example` 和 `docker-compose.yml` 中的密码、JWT secret 仅用于本地课程演示。真实部署前必须通过 `.env`、CI Secret 或服务器环境变量替换，不要把真实密钥写入代码、README、日志或截图。
 
+
+## 自动 CI/CD 部署
+
+项目根目录的 `.github/workflows/ci.yml` 会在 `main` 分支更新时自动执行 CI/CD：
+
+1. 运行后端 `mvn test`。
+2. 运行前端 `npm ci`、`npm run typecheck`、`npm run build`。
+3. 构建后端和前端 Docker 镜像。
+4. 推送镜像到 GitHub Container Registry（GHCR）。
+5. 通过 SSH 登录服务器，拉取新镜像并执行 `docker compose up -d`。
+
+需要在 GitHub 仓库 `Settings -> Secrets and variables -> Actions` 配置：
+
+```text
+SERVER_HOST      服务器 IP 或域名，例如 120.26.242.157
+SERVER_USER      SSH 用户名，例如 root
+SERVER_PORT      SSH 端口，默认 22
+SERVER_SSH_KEY   部署专用 SSH 私钥全文
+DEPLOY_PATH      服务器部署目录，例如 /opt/nekocafe
+```
+
+服务器部署目录中的 `.env` 会被保留，CI/CD 不会覆盖它。数据库连接、`JWT_SECRET`、AI API Key 等生产敏感配置应继续只保存在服务器 `.env` 中，不要提交到 Git 仓库。
+
+生产部署使用 `NekoCafe/docker-compose.prod.yml` 的镜像模式。首次发布 GHCR 镜像后，如果镜像保持私有，需要在服务器上提前执行 `docker login ghcr.io`；课程演示环境可将 GHCR package 设为 public，简化服务器拉取。
+
 ## 配置环境变量
 
 复制 `.env.example` 为 `.env`，填入自己的远程 MySQL 配置。不要把 `.env` 提交到 Git。

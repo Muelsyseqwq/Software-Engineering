@@ -1,4 +1,4 @@
-name: NekoCafe CI
+name: NekoCafe CI/CD
 
 on:
   push:
@@ -7,6 +7,13 @@ on:
   pull_request:
     branches:
       - main
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
 
 jobs:
   backend-test:
@@ -47,12 +54,206 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
+          cache: npm
+          cache-dependency-path: NekoCafe/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run frontend typecheck
         run: npm run typecheck
 
       - name: Build frontend
         run: npm run build
+
+  docker-build-push:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    needs:
+      - backend-test
+      - frontend-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    outputs:
+      backend-image: ${{ steps.image-tags.outputs.backend-image }}
+      frontend-image: ${{ steps.image-tags.outputs.frontend-image }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Resolve image tags
+        id: image-tags
+        run: |
+          OWNER_LC="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "backend-image=${REGISTRY}/${OWNER_LC}/nekocafe-backend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "backend-latest=${REGISTRY}/${OWNER_LC}/nekocafe-backend:latest" >> "$GITHUB_OUTPUT"
+          echo "frontend-image=${REGISTRY}/${OWNER_LC}/nekocafe-frontend:${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "frontend-latest=${REGISTRY}/${OWNER_LC}/nekocafe-frontend:latest" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: NekoCafe/backend
+          file: NekoCafe/backend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image-tags.outputs.backend-image }}
+            ${{ steps.image-tags.outputs.backend-latest }}
+          cache-from: type=gha,scope=nekocafe-backend
+          cache-to: type=gha,mode=max,scope=nekocafe-backend
+
+      - name: Build and push frontend image
+        uses: docker/build-push-action@v6
+        with:
+          context: NekoCafe/frontend
+          file: NekoCafe/frontend/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.image-tags.outputs.frontend-image }}
+            ${{ steps.image-tags.outputs.frontend-latest }}
+          cache-from: type=gha,scope=nekocafe-frontend
+          cache-to: type=gha,mode=max,scope=nekocafe-frontend
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs:
+      - docker-build-push
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Validate deployment secrets
+        run: |
+          test -n "${{ secrets.SERVER_HOST }}"
+          test -n "${{ secrets.SERVER_USER }}"
+          test -n "${{ secrets.SERVER_PORT }}"
+          test -n "${{ secrets.SERVER_SSH_KEY }}"
+          test -n "${{ secrets.DEPLOY_PATH }}"
+
+      - name: Deploy with Docker Compose over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          BACKEND_IMAGE: ${{ needs.docker-build-push.outputs.backend-image }}
+          FRONTEND_IMAGE: ${{ needs.docker-build-push.outputs.frontend-image }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          port: ${{ secrets.SERVER_PORT }}
+          envs: DEPLOY_PATH,BACKEND_IMAGE,FRONTEND_IMAGE
+          script: |
+            set -eu
+
+            mkdir -p "$DEPLOY_PATH"
+            cd "$DEPLOY_PATH"
+
+            if [ ! -f .env ]; then
+              cat > .env.example <<'ENVEXAMPLE'
+            NEKO_PROFILE=prod
+            MYSQL_HOST=replace_with_existing_mysql_host
+            MYSQL_PORT=3306
+            MYSQL_DATABASE=nekocafe
+            MYSQL_USERNAME=replace_with_mysql_username
+            MYSQL_PASSWORD=replace_with_mysql_password
+            MYSQL_USE_SSL=false
+            MYSQL_ALLOW_PUBLIC_KEY_RETRIEVAL=false
+            JWT_SECRET=replace_with_at_least_32_character_secret
+            JWT_EXPIRES_MINUTES=120
+            FLYWAY_ENABLED=true
+            AI_ENABLED=false
+            AI_PROVIDER=openai-compatible
+            AI_BASE_URL=https://api.deepseek.com
+            AI_API_KEY=
+            AI_MODEL=deepseek-v4-flash
+            AI_TIMEOUT_SECONDS=20
+            AI_MAX_TOKENS=1000
+            AI_TEMPERATURE=0.3
+            BACKEND_PORT_HOST=8080
+            FRONTEND_PORT_HOST=80
+            ENVEXAMPLE
+              echo "Missing $DEPLOY_PATH/.env. Created .env.example; fill it on the server and rerun deployment."
+              exit 1
+            fi
+
+            cat > docker-compose.yml <<COMPOSE
+            services:
+              redis:
+                image: docker.m.daocloud.io/library/redis:7-alpine
+                container_name: nekocafe-redis
+                command: ["redis-server", "--appendonly", "yes"]
+                volumes:
+                  - redis-data:/data
+                healthcheck:
+                  test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+                  interval: 10s
+                  timeout: 5s
+                  retries: 10
+                  start_period: 10s
+                restart: unless-stopped
+
+              backend:
+                image: ${BACKEND_IMAGE}
+                container_name: nekocafe-backend
+                env_file:
+                  - .env
+                environment:
+                  NEKO_PROFILE: prod
+                  REDIS_HOST: redis
+                  REDIS_PORT: 6379
+                  CAT_PHOTO_UPLOAD_DIR: /app/uploads/cats
+                  STORE_PHOTO_UPLOAD_DIR: /app/uploads/stores
+                ports:
+                  - "\${BACKEND_PORT_HOST:-8080}:8080"
+                volumes:
+                  - backend-uploads:/app/uploads
+                depends_on:
+                  redis:
+                    condition: service_healthy
+                healthcheck:
+                  test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+                  interval: 15s
+                  timeout: 5s
+                  retries: 12
+                  start_period: 45s
+                restart: unless-stopped
+
+              frontend:
+                image: ${FRONTEND_IMAGE}
+                container_name: nekocafe-frontend
+                ports:
+                  - "\${FRONTEND_PORT_HOST:-80}:80"
+                depends_on:
+                  backend:
+                    condition: service_healthy
+                healthcheck:
+                  test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+                  interval: 15s
+                  timeout: 5s
+                  retries: 10
+                  start_period: 10s
+                restart: unless-stopped
+
+            volumes:
+              redis-data:
+              backend-uploads:
+            COMPOSE
+
+            docker compose pull
+            docker compose up -d --remove-orphans
+            docker image prune -f
+
+            docker compose ps
+            curl -fsS http://127.0.0.1:8080/actuator/health
+            curl -fsS http://127.0.0.1/

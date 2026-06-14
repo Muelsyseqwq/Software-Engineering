@@ -3,32 +3,58 @@ services:
     image: docker.m.daocloud.io/library/redis:7-alpine
     container_name: nekocafe-redis
     command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
 
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: ${BACKEND_IMAGE}
     container_name: nekocafe-backend
     env_file:
       - .env
     environment:
-      NEKO_PROFILE: dev
-      FLYWAY_ENABLED: "true"
+      NEKO_PROFILE: prod
       REDIS_HOST: redis
+      REDIS_PORT: 6379
+      CAT_PHOTO_UPLOAD_DIR: /app/uploads/cats
+      STORE_PHOTO_UPLOAD_DIR: /app/uploads/stores
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT_HOST:-8080}:8080"
+    volumes:
+      - backend-uploads:/app/uploads
     depends_on:
-      - redis
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: ${FRONTEND_IMAGE}
     container_name: nekocafe-frontend
     ports:
-      - "80:80"
+      - "${FRONTEND_PORT_HOST:-80}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     restart: unless-stopped
+
+volumes:
+  redis-data:
+  backend-uploads:
