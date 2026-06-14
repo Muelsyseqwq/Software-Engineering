@@ -4,7 +4,7 @@
       <div>
         <p class="eyebrow">STAFF 签到</p>
         <h1>预约签到</h1>
-        <p>店员为顾客办理到店签到和入座。可查看预约备注和时段信息。</p>
+        <p>店员为顾客办理到店签到和入座；对一直未到店的预约，可手动取消释放名额。</p>
       </div>
       <el-button type="primary" @click="loadReservations">刷新预约</el-button>
     </header>
@@ -20,9 +20,12 @@
       <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }"><el-tag>{{ row.status }}</el-tag></template>
       </el-table-column>
-      <el-table-column label="操作" width="120">
+      <el-table-column label="操作" width="180">
         <template #default="{ row }">
-          <el-button v-if="row.status !== '已签到' && row.status !== '已完成' && row.status !== '已取消'" type="success" size="small" @click="handleCheckIn(row.id)">签到</el-button>
+          <template v-if="canOperate(row.status)">
+            <el-button type="success" size="small" @click="handleCheckIn(row.id)">签到</el-button>
+            <el-button type="danger" size="small" link :loading="cancellingId === row.id" @click="handleCancel(row)">取消</el-button>
+          </template>
           <span v-else>-</span>
         </template>
       </el-table-column>
@@ -32,10 +35,11 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { checkInReservation, fetchTodayReservations, type StaffReservationRow } from '@/api/staff'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { cancelStaffReservation, checkInReservation, fetchTodayReservations, type StaffReservationRow } from '@/api/staff'
 
 const reservations = ref<StaffReservationRow[]>([])
+const cancellingId = ref<number>()
 
 async function loadReservations() {
   try {
@@ -45,6 +49,10 @@ async function loadReservations() {
   }
 }
 
+function canOperate(status: string) {
+  return !['已签到', '已完成', '已取消'].includes(status)
+}
+
 async function handleCheckIn(id: number) {
   try {
     await checkInReservation(id)
@@ -52,6 +60,22 @@ async function handleCheckIn(id: number) {
     await loadReservations()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '签到失败')
+  }
+}
+
+async function handleCancel(row: StaffReservationRow) {
+  try {
+    await ElMessageBox.confirm(`确认取消预约「${row.reservationNo}」吗？取消后将释放该预约名额，顾客不能再签到。`, '取消预约', { type: 'warning' })
+    cancellingId.value = row.id
+    await cancelStaffReservation(row.id)
+    ElMessage.success('预约已取消')
+    await loadReservations()
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      ElMessage.error(error instanceof Error ? error.message : '取消预约失败')
+    }
+  } finally {
+    cancellingId.value = undefined
   }
 }
 

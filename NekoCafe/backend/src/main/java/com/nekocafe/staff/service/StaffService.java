@@ -8,6 +8,7 @@ import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.entity.FoodOrderItem;
 import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
+import com.nekocafe.order.service.OrderService;
 import com.nekocafe.reservation.entity.Reservation;
 import com.nekocafe.reservation.entity.ReservationSlot;
 import com.nekocafe.reservation.mapper.ReservationMapper;
@@ -44,11 +45,16 @@ public class StaffService {
     private static final String PAID = "PAID";
     private static final String PREPARING = "PREPARING";
     private static final String COMPLETED = "COMPLETED";
+    private static final String REFUND_APPLIED = "APPLIED";
+    private static final String RESERVED = "RESERVED";
+    private static final String NO_SHOW = "NO_SHOW";
+    private static final String CANCELLED = "CANCELLED";
 
     private final ReservationMapper reservationMapper;
     private final ReservationSlotMapper reservationSlotMapper;
     private final FoodOrderMapper foodOrderMapper;
     private final FoodOrderItemMapper foodOrderItemMapper;
+    private final OrderService orderService;
     private final DiningTableMapper diningTableMapper;
     private final DiningTableStatusLogMapper diningTableStatusLogMapper;
     private final CatMapper catMapper;
@@ -60,6 +66,7 @@ public class StaffService {
                         ReservationSlotMapper reservationSlotMapper,
                         FoodOrderMapper foodOrderMapper,
                         FoodOrderItemMapper foodOrderItemMapper,
+                        OrderService orderService,
                         DiningTableMapper diningTableMapper,
                         DiningTableStatusLogMapper diningTableStatusLogMapper,
                         CatMapper catMapper,
@@ -70,6 +77,7 @@ public class StaffService {
         this.reservationSlotMapper = reservationSlotMapper;
         this.foodOrderMapper = foodOrderMapper;
         this.foodOrderItemMapper = foodOrderItemMapper;
+        this.orderService = orderService;
         this.diningTableMapper = diningTableMapper;
         this.diningTableStatusLogMapper = diningTableStatusLogMapper;
         this.catMapper = catMapper;
@@ -188,6 +196,26 @@ public class StaffService {
         }
     }
 
+    @Transactional
+    public void cancelReservation(Long id, Long staffId) {
+        Reservation reservation = reservationMapper.selectById(id);
+        if (reservation == null || reservation.getDeleted() == 1) {
+            throw new BizException(4001, "预约不存在");
+        }
+        assertStoreBelongsToStaff(staffId, reservation.getStoreId());
+        if (!RESERVED.equals(reservation.getStatus()) && !NO_SHOW.equals(reservation.getStatus())) {
+            throw new BizException(4002, "只有未签到的预约可以取消");
+        }
+        orderService.cancelCreatedOrdersForReservation(reservation.getUserId(), reservation.getId());
+        reservation.setStatus(CANCELLED);
+        reservation.setCancelledAt(LocalDateTime.now());
+        reservationMapper.updateById(reservation);
+        reservationSlotMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ReservationSlot>()
+            .eq(ReservationSlot::getId, reservation.getSlotId())
+            .setSql("reserved_count = GREATEST(reserved_count - 1, 0)")
+            .setSql("available_count = available_count + 1"));
+    }
+
     public List<StaffOrderRow> pendingOrders(Long staffId) {
         List<Long> storeIds = resolveStoreIds(staffId);
         if (storeIds.isEmpty()) {
@@ -214,6 +242,7 @@ public class StaffService {
         if (!PAID.equals(order.getStatus())) {
             throw new BizException(5002, "只有已支付订单可以开始制作");
         }
+        ensureOrderNotRefundApplied(order);
         order.setStatus(PREPARING);
         order.setHandlerId(staffId);
         foodOrderMapper.updateById(order);
@@ -229,9 +258,16 @@ public class StaffService {
         if (!PAID.equals(order.getStatus()) && !PREPARING.equals(order.getStatus())) {
             throw new BizException(5003, "只有已支付或制作中的订单可以完成");
         }
+        ensureOrderNotRefundApplied(order);
         order.setStatus(COMPLETED);
         order.setCompletedAt(LocalDateTime.now());
         foodOrderMapper.updateById(order);
+    }
+
+    private void ensureOrderNotRefundApplied(FoodOrder order) {
+        if (REFUND_APPLIED.equals(order.getRefundStatus())) {
+            throw new BizException(5004, "订单已申请退款，等待店长处理");
+        }
     }
 
     private FoodOrder loadOrder(Long id) {
@@ -384,6 +420,7 @@ public class StaffService {
                 o.getTotalAmount(),
                 tableNo,
                 translateOrderStatus(o.getStatus()),
+                o.getRefundStatus(),
                 o.getCreatedAt() != null ? o.getCreatedAt().toString() : ""
             );
         }).toList();

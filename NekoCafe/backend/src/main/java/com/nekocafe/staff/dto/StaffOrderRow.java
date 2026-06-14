@@ -9,6 +9,7 @@ public record StaffOrderRow(
     BigDecimal amount,
     String tableNo,
     String status,
+    String refundStatus,
     String createdAt
 ) {
 }

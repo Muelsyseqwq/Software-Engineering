@@ -35,12 +35,13 @@
       <el-table-column label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
+              <p v-if="row.status === 'NO_SHOW'" class="muted">未到店预约可手动取消</p>
         </template>
       </el-table-column>
       <el-table-column label="操作" width="170" fixed="right">
         <template #default="{ row }">
           <el-button v-if="canOrder(row.status)" link type="primary" @click="goCheckout(row)">去点单</el-button>
-          <el-button v-if="canCancel(row.status)" link type="danger" :loading="cancellingId === row.id" @click="handleCancel(row.id)">取消</el-button>
+          <el-button v-if="canCancel(row.status)" link type="danger" :loading="cancellingId === row.id" @click="handleCancel(row)">取消</el-button>
           <span v-if="!canOrder(row.status) && !canCancel(row.status)" class="muted">不可操作</span>
         </template>
       </el-table-column>
@@ -103,11 +104,14 @@ async function loadReservations() {
   }
 }
 
-async function handleCancel(id: number) {
+async function handleCancel(row: ReservationRow) {
+  const message = row.status === 'NO_SHOW'
+    ? '该预约未到店，确认作废并取消记录吗？'
+    : '确认取消该预约吗？若该预约有关联的未支付订单，系统会一并取消；如已有已支付订单，将无法取消。'
   try {
-    await ElMessageBox.confirm('确认取消该预约吗？若该预约有关联的未支付订单，系统会一并取消；如已有已支付订单，将无法取消。', '取消预约', { type: 'warning' })
-    cancellingId.value = id
-    await cancelReservation(id)
+    await ElMessageBox.confirm(message, '取消预约', { type: 'warning' })
+    cancellingId.value = row.id
+    await cancelReservation(row.id)
     ElMessage.success('预约已取消')
     await loadReservations()
   } catch (error) {

@@ -11,6 +11,8 @@ import com.nekocafe.order.entity.FoodOrder;
 import com.nekocafe.order.entity.FoodOrderItem;
 import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
+import com.nekocafe.queue.entity.WaitingQueueTicket;
+import com.nekocafe.queue.mapper.WaitingQueueTicketMapper;
 import com.nekocafe.reservation.entity.Reservation;
 import com.nekocafe.reservation.mapper.ReservationMapper;
 import com.nekocafe.store.entity.DiningTable;
@@ -39,6 +41,7 @@ public class OrderService {
     private static final String CANCELLED = "CANCELLED";
     private static final String RESERVED_STATUS = "RESERVED";
     private static final String CHECKED_IN = "CHECKED_IN";
+    private static final String SEATED = "SEATED";
 
     private final FoodOrderMapper orderMapper;
     private final FoodOrderItemMapper orderItemMapper;
@@ -46,6 +49,7 @@ public class OrderService {
     private final StoreMapper storeMapper;
     private final DiningTableMapper diningTableMapper;
     private final ReservationMapper reservationMapper;
+    private final WaitingQueueTicketMapper waitingQueueTicketMapper;
     private final ReviewMapper reviewMapper;
     private final RewardRedemptionService rewardRedemptionService;
 
@@ -56,6 +60,7 @@ public class OrderService {
         StoreMapper storeMapper,
         DiningTableMapper diningTableMapper,
         ReservationMapper reservationMapper,
+        WaitingQueueTicketMapper waitingQueueTicketMapper,
         ReviewMapper reviewMapper,
         RewardRedemptionService rewardRedemptionService
     ) {
@@ -65,6 +70,7 @@ public class OrderService {
         this.storeMapper = storeMapper;
         this.diningTableMapper = diningTableMapper;
         this.reservationMapper = reservationMapper;
+        this.waitingQueueTicketMapper = waitingQueueTicketMapper;
         this.reviewMapper = reviewMapper;
         this.rewardRedemptionService = rewardRedemptionService;
     }
@@ -83,6 +89,7 @@ public class OrderService {
             throw new BizException(3002, "门店不存在");
         }
         Reservation reservation = null;
+        WaitingQueueTicket queueTicket = null;
         if (request.reservationId() != null) {
             reservation = reservationMapper.selectOne(new LambdaQueryWrapper<Reservation>()
                 .eq(Reservation::getId, request.reservationId())
@@ -96,6 +103,9 @@ public class OrderService {
         }
 
         validateReservationCanBeUsedForOrder(reservation);
+        if (request.queueTicketId() != null) {
+            queueTicket = loadQueueTicketForOrder(userId, request);
+        }
         if (reservation != null) {
             long existingCreatedCount = orderMapper.selectCount(new LambdaQueryWrapper<FoodOrder>()
                 .eq(FoodOrder::getUserId, userId)
@@ -104,6 +114,16 @@ public class OrderService {
                 .eq(FoodOrder::getStatus, CREATED));
             if (existingCreatedCount > 0) {
                 throw new BizException(3012, "该预约已有一笔待支付订单，请先完成支付或取消后再下单");
+            }
+        }
+        if (queueTicket != null) {
+            long existingCreatedCount = orderMapper.selectCount(new LambdaQueryWrapper<FoodOrder>()
+                .eq(FoodOrder::getUserId, userId)
+                .eq(FoodOrder::getQueueTicketId, queueTicket.getId())
+                .eq(FoodOrder::getDeleted, 0)
+                .eq(FoodOrder::getStatus, CREATED));
+            if (existingCreatedCount > 0) {
+                throw new BizException(3013, "该排队入座已有一笔待支付订单，请先完成支付或取消后再下单");
             }
         }
 
@@ -132,7 +152,8 @@ public class OrderService {
         order.setUserId(userId);
         order.setStoreId(request.storeId());
         order.setReservationId(request.reservationId());
-        order.setTableId(reservation == null ? null : reservation.getTableId());
+        order.setQueueTicketId(queueTicket == null ? null : queueTicket.getId());
+        order.setTableId(queueTicket != null ? queueTicket.getTableId() : (reservation == null ? null : reservation.getTableId()));
         order.setTotalAmount(total);
         order.setRewardRedemptionId(couponUsage == null ? null : couponUsage.redemptionId());
         order.setCouponDiscountAmount(discountAmount);
@@ -219,6 +240,7 @@ public class OrderService {
             order.getTableId(),
             table == null ? null : table.getTableNo(),
             order.getReservationId(),
+            order.getQueueTicketId(),
             order.getTotalAmount(),
             order.getRewardRedemptionId(),
             order.getCouponName(),
@@ -248,6 +270,22 @@ public class OrderService {
             .eq(Review::getUserId, userId)
             .eq(Review::getOrderId, orderId)
             .eq(Review::getDeleted, 0)) > 0;
+    }
+
+    private WaitingQueueTicket loadQueueTicketForOrder(Long userId, CreateOrderRequest request) {
+        WaitingQueueTicket ticket = waitingQueueTicketMapper.selectOne(new LambdaQueryWrapper<WaitingQueueTicket>()
+            .eq(WaitingQueueTicket::getId, request.queueTicketId())
+            .eq(WaitingQueueTicket::getUserId, userId)
+            .eq(WaitingQueueTicket::getStoreId, request.storeId())
+            .eq(WaitingQueueTicket::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (ticket == null) {
+            throw new BizException(3014, "排队入座记录不存在或不属于当前账号");
+        }
+        if (!SEATED.equals(ticket.getStatus()) || ticket.getTableId() == null) {
+            throw new BizException(3015, "排队顾客确认入座后才可以点餐");
+        }
+        return ticket;
     }
 
     private void validateReservationCanBeUsedForOrder(Reservation reservation) {
@@ -325,6 +363,9 @@ public class OrderService {
         if (request == null || request.storeId() == null) {
             throw new BizException(3001, "请选择下单门店");
         }
+        if (request.reservationId() != null && request.queueTicketId() != null) {
+            throw new BizException(3016, "预约点餐和排队点餐不能同时关联");
+        }
         if (request.items() == null || request.items().isEmpty()) {
             throw new BizException(3007, "请选择至少一款菜品");
         }
@@ -344,7 +385,7 @@ public class OrderService {
         return normalized.isEmpty() ? null : normalized;
     }
 
-    public record CreateOrderRequest(Long storeId, Long reservationId, List<CreateOrderItemRequest> items, String remark, Long rewardRedemptionId) {
+    public record CreateOrderRequest(Long storeId, Long reservationId, Long queueTicketId, List<CreateOrderItemRequest> items, String remark, Long rewardRedemptionId) {
     }
 
     public record CreateOrderItemRequest(Long dishId, Integer quantity) {
@@ -361,6 +402,7 @@ public class OrderService {
         Long tableId,
         String tableNo,
         Long reservationId,
+        Long queueTicketId,
         BigDecimal totalAmount,
         Long rewardRedemptionId,
         String couponName,

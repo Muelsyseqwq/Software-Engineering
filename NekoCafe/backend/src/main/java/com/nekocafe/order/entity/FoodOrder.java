@@ -16,6 +16,7 @@ public class FoodOrder {
     private Long userId;
     private Long storeId;
     private Long reservationId;
+    private Long queueTicketId;
     private Long tableId;
     private BigDecimal totalAmount;
     private Long rewardRedemptionId;
@@ -44,6 +45,8 @@ public class FoodOrder {
     public void setStoreId(Long storeId) { this.storeId = storeId; }
     public Long getReservationId() { return reservationId; }
     public void setReservationId(Long reservationId) { this.reservationId = reservationId; }
+    public Long getQueueTicketId() { return queueTicketId; }
+    public void setQueueTicketId(Long queueTicketId) { this.queueTicketId = queueTicketId; }
     public Long getTableId() { return tableId; }
     public void setTableId(Long tableId) { this.tableId = tableId; }
     public BigDecimal getTotalAmount() { return totalAmount; }

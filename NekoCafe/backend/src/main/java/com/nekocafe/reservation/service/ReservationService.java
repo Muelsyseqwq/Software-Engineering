@@ -31,6 +31,7 @@ public class ReservationService {
     private static final String AVAILABLE = "AVAILABLE";
     private static final String RESERVED = "RESERVED";
     private static final String CANCELLED = "CANCELLED";
+    private static final String NO_SHOW = "NO_SHOW";
 
     private final ReservationSlotMapper slotMapper;
     private final ReservationMapper reservationMapper;
@@ -169,7 +170,7 @@ public class ReservationService {
         if (reservation == null) {
             throw new BizException(2106, "预约不存在");
         }
-        if (CANCELLED.equals(reservation.getStatus()) || "CHECKED_IN".equals(reservation.getStatus()) || "COMPLETED".equals(reservation.getStatus())) {
+        if (!RESERVED.equals(reservation.getStatus()) && !NO_SHOW.equals(reservation.getStatus())) {
             throw new BizException(2107, "当前预约状态不可取消");
         }
         if (orderService.hasPaidOrActiveOrdersForReservation(userId, reservation.getId())) {

@@ -5,24 +5,25 @@ const TOKEN_KEY = 'nekocafe_token'
 const USER_KEY = 'nekocafe_user'
 const ROLES_KEY = 'nekocafe_roles'
 const EXPIRES_AT_KEY = 'nekocafe_expires_at'
+const authStorage = sessionStorage
 
 function readJson<T>(key: string, fallback: T): T {
-  const raw = localStorage.getItem(key)
+  const raw = authStorage.getItem(key)
   if (!raw) return fallback
   try {
     return JSON.parse(raw) as T
   } catch {
-    localStorage.removeItem(key)
+    authStorage.removeItem(key)
     return fallback
   }
 }
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
-    token: localStorage.getItem(TOKEN_KEY) || '',
+    token: authStorage.getItem(TOKEN_KEY) || '',
     user: readJson<AuthUser | null>(USER_KEY, null),
     roles: readJson<RoleCode[]>(ROLES_KEY, []),
-    expiresAt: localStorage.getItem(EXPIRES_AT_KEY) || '',
+    expiresAt: authStorage.getItem(EXPIRES_AT_KEY) || '',
     profileSynced: false,
   }),
   getters: {
@@ -31,7 +32,7 @@ export const useAuthStore = defineStore('auth', {
   actions: {
     setToken(token: string) {
       this.token = token
-      localStorage.setItem(TOKEN_KEY, token)
+      authStorage.setItem(TOKEN_KEY, token)
     },
     setAuth(auth: AuthResponse) {
       this.token = auth.token
@@ -39,10 +40,10 @@ export const useAuthStore = defineStore('auth', {
       this.roles = auth.user.roles
       this.expiresAt = auth.expiresAt
       this.profileSynced = true
-      localStorage.setItem(TOKEN_KEY, auth.token)
-      localStorage.setItem(USER_KEY, JSON.stringify(auth.user))
-      localStorage.setItem(ROLES_KEY, JSON.stringify(auth.user.roles))
-      localStorage.setItem(EXPIRES_AT_KEY, auth.expiresAt)
+      authStorage.setItem(TOKEN_KEY, auth.token)
+      authStorage.setItem(USER_KEY, JSON.stringify(auth.user))
+      authStorage.setItem(ROLES_KEY, JSON.stringify(auth.user.roles))
+      authStorage.setItem(EXPIRES_AT_KEY, auth.expiresAt)
     },
     async fetchMe() {
       const { getMeApi } = await import('@/api/auth')
@@ -50,8 +51,8 @@ export const useAuthStore = defineStore('auth', {
       this.user = user
       this.roles = user.roles
       this.profileSynced = true
-      localStorage.setItem(USER_KEY, JSON.stringify(user))
-      localStorage.setItem(ROLES_KEY, JSON.stringify(user.roles))
+      authStorage.setItem(USER_KEY, JSON.stringify(user))
+      authStorage.setItem(ROLES_KEY, JSON.stringify(user.roles))
       return user
     },
     logout() {
@@ -60,10 +61,10 @@ export const useAuthStore = defineStore('auth', {
       this.roles = []
       this.expiresAt = ''
       this.profileSynced = false
-      localStorage.removeItem(TOKEN_KEY)
-      localStorage.removeItem(USER_KEY)
-      localStorage.removeItem(ROLES_KEY)
-      localStorage.removeItem(EXPIRES_AT_KEY)
+      authStorage.removeItem(TOKEN_KEY)
+      authStorage.removeItem(USER_KEY)
+      authStorage.removeItem(ROLES_KEY)
+      authStorage.removeItem(EXPIRES_AT_KEY)
     },
   },
 })

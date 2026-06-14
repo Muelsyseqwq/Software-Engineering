@@ -9,6 +9,7 @@ export interface CreateOrderItemRequest {
 export interface CreateOrderRequest {
   storeId: number
   reservationId?: number
+  queueTicketId?: number
   items: CreateOrderItemRequest[]
   remark?: string
   rewardRedemptionId?: number
@@ -34,6 +35,7 @@ export interface OrderResponse {
   tableId?: number
   tableNo?: string
   reservationId?: number
+  queueTicketId?: number
   totalAmount: number
   rewardRedemptionId?: number
   couponName?: string

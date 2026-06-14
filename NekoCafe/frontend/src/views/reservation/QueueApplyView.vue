@@ -50,6 +50,7 @@
         <template v-if="status?.myTicket">
           <strong>{{ status.myTicket.queueNumber }}</strong>
           <p>{{ ticketHint(status.myTicket.status) }}</p>
+          <p v-if="status.myTicket.status === 'SEATED' && status.myTicket.tableNo" class="seat-line">已入座：{{ status.myTicket.area || '座位区' }} · {{ status.myTicket.tableNo }}</p>
           <small>{{ status.myTicket.contactName }} · {{ status.myTicket.partySize }} 人 · {{ formatTime(status.myTicket.createdAt) }}</small>
         </template>
         <el-empty v-else description="当前没有排队号码" />
@@ -64,6 +65,7 @@
         show-icon
         :closable="false"
       />
+      <el-button v-if="canOrderFromQueue" type="success" size="large" @click="goQueueCheckout">去点单</el-button>
       <el-button v-if="canCancel" :loading="submitting" @click="cancelTicket">取消排队</el-button>
       <el-button type="primary" size="large" :disabled="!status?.canApply" :loading="submitting" @click="apply">
         {{ status?.canApply ? '申请排队' : '当前不可取号' }}
@@ -108,6 +110,7 @@ const rules: FormRules<typeof form> = {
 }
 
 const canCancel = computed(() => ['WAITING', 'CALLED'].includes(status.value?.myTicket?.status || ''))
+const canOrderFromQueue = computed(() => status.value?.myTicket?.status === 'SEATED' && Boolean(status.value.myTicket.tableId))
 
 async function loadStores() {
   stores.value = await fetchStores()
@@ -149,6 +152,12 @@ async function apply() {
   })
 }
 
+function goQueueCheckout() {
+  const ticket = status.value?.myTicket
+  if (!ticket || !form.storeId) return
+  router.push({ path: '/orders/checkout', query: { storeId: form.storeId, queueTicketId: ticket.id } })
+}
+
 async function cancelTicket() {
   const ticket = status.value?.myTicket
   if (!ticket) return
@@ -179,7 +188,7 @@ function ticketStatusText(value: string) {
 function ticketHint(value: string) {
   if (value === 'WAITING') return '请留意当前叫号，快到你啦。'
   if (value === 'CALLED') return '已叫到你的号码，请尽快到前台确认。'
-  if (value === 'SEATED') return '已确认入座，祝你用餐愉快。'
+  if (value === 'SEATED') return '已确认入座，可以直接去点单。'
   if (value === 'EXPIRED') return '该号码已过号，请重新取号排队。'
   if (value === 'CANCELLED') return '该号码已取消，可重新取号。'
   return '请关注现场叫号。'
@@ -229,6 +238,7 @@ onBeforeUnmount(() => {
 .number-card span, .ticket-title span { color: #8a6a52; font-weight: 800; }
 .number-card strong, .ticket-card strong { font-size: 56px; color: #d97706; line-height: 1; }
 .number-card small, .ticket-card small, .ticket-card p { color: #7c5f4a; margin: 0; }
+.seat-line { color: #16a34a !important; font-weight: 800; }
 .ticket-title { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
 .submit-row { display: flex; justify-content: flex-end; gap: 12px; align-items: center; flex-wrap: wrap; }
 .submit-row .el-alert { flex: 1 1 260px; }

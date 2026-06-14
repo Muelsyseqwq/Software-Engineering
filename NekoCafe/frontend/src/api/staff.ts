@@ -20,6 +20,7 @@ export interface StaffOrderRow {
   amount: number
   tableNo: string
   status: string
+  refundStatus?: string
   createdAt: string
 }
 
@@ -51,6 +52,7 @@ export interface StaffReviewRow {
   rating: number
   content: string
   status: string
+  refundStatus?: string
   createdAt: string
 }
 
@@ -58,6 +60,9 @@ export interface StaffQueueTicket {
   id: number
   queueNumber: number
   partySize: number
+  tableId?: number
+  tableNo?: string
+  area?: string
   status: string
   contactName: string
   contactPhone: string
@@ -84,6 +89,11 @@ export async function fetchTodayReservations() {
 
 export async function checkInReservation(id: number) {
   const { data } = await http.post<ApiResult<void>>(`/staff/reservations/${id}/check-in`)
+  return data.data
+}
+
+export async function cancelStaffReservation(id: number) {
+  const { data } = await http.post<ApiResult<void>>(`/staff/reservations/${id}/cancel`)
   return data.data
 }
 
@@ -139,8 +149,8 @@ export async function callNextQueueNumber(storeId: number | string) {
   return data.data
 }
 
-export async function markQueueTicketSeated(ticketId: number | string) {
-  const { data } = await http.post<ApiResult<void>>(`/staff/queues/tickets/${ticketId}/seat`)
+export async function markQueueTicketSeated(ticketId: number | string, payload: { tableId: number }) {
+  const { data } = await http.post<ApiResult<StaffQueueTicket>>(`/staff/queues/tickets/${ticketId}/seat`, payload)
   return data.data
 }
 

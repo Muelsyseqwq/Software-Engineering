@@ -405,6 +405,7 @@ class CustomerServiceCouponOrderTest {
             null,                  // tableId
             null,                  // tableNo
             null,                  // reservationId
+            null,                  // queueTicketId
             new BigDecimal("100"), // totalAmount
             null,                  // rewardRedemptionId
             null,                  // couponName

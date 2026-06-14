@@ -3,6 +3,7 @@ package com.nekocafe.staff.controller;
 import com.nekocafe.cat.entity.Cat;
 import com.nekocafe.common.result.ApiResult;
 import com.nekocafe.queue.service.WaitingQueueService;
+import com.nekocafe.queue.service.WaitingQueueService.MarkSeatedRequest;
 import com.nekocafe.queue.service.WaitingQueueService.QueueTicketResponse;
 import com.nekocafe.queue.service.WaitingQueueService.StaffQueueStatusResponse;
 import com.nekocafe.security.AuthPrincipal;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -44,6 +46,12 @@ public class StaffController {
     @PostMapping("/reservations/{id}/check-in")
     public ApiResult<Void> checkInReservation(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         staffService.checkInReservation(id, principal.userId());
+        return ApiResult.ok();
+    }
+
+    @PostMapping("/reservations/{id}/cancel")
+    public ApiResult<Void> cancelReservation(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        staffService.cancelReservation(id, principal.userId());
         return ApiResult.ok();
     }
 
@@ -111,8 +119,9 @@ public class StaffController {
 
     @PostMapping("/queues/tickets/{ticketId}/seat")
     public ApiResult<QueueTicketResponse> markQueueTicketSeated(@AuthenticationPrincipal AuthPrincipal principal,
-                                                                 @PathVariable Long ticketId) {
-        return ApiResult.ok(waitingQueueService.markSeated(principal.userId(), ticketId));
+                                                                 @PathVariable Long ticketId,
+                                                                 @RequestBody MarkSeatedRequest request) {
+        return ApiResult.ok(waitingQueueService.markSeated(principal.userId(), ticketId, request));
     }
 
     @PostMapping("/queues/{storeId}/reset")

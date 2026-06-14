@@ -616,7 +616,7 @@ function orderReviewText(detail: ManagerOrderDetail) {
   return detail.reviewContent ? `${rating}｜${detail.reviewContent}` : rating
 }
 function canReviewRefund(row: ManagerOrderRow) {
-  return row.status === 'PAID' && row.refundStatus === 'APPLIED'
+  return row.refundStatus === 'APPLIED'
 }
 
 function openStoreDialog() {

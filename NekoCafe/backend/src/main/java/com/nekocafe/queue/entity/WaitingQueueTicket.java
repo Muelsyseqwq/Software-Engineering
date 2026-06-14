@@ -18,6 +18,7 @@ public class WaitingQueueTicket {
     private Integer queueNumber;
     private Integer resetVersion;
     private Integer partySize;
+    private Long tableId;
     private String status;
     private String contactName;
     private String contactPhone;
@@ -44,6 +45,8 @@ public class WaitingQueueTicket {
     public void setResetVersion(Integer resetVersion) { this.resetVersion = resetVersion; }
     public Integer getPartySize() { return partySize; }
     public void setPartySize(Integer partySize) { this.partySize = partySize; }
+    public Long getTableId() { return tableId; }
+    public void setTableId(Long tableId) { this.tableId = tableId; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public String getContactName() { return contactName; }
