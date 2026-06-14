@@ -249,9 +249,9 @@ if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 ```text
 1. 构建后端 Docker 镜像
 2. 构建前端 Docker 镜像
-3. 推送镜像到 GitHub Container Registry（GHCR）
+3. 推送镜像到阿里云容器镜像服务 ACR
 4. 通过 SSH 登录服务器
-5. 在服务器部署目录更新 docker-compose.yml 中的镜像标签
+5. 在服务器上登录 ACR，并在部署目录更新 docker-compose.yml 中的镜像标签
 6. 执行 docker compose pull
 7. 执行 docker compose up -d --remove-orphans
 8. 通过健康检查确认服务可用
@@ -295,25 +295,26 @@ if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 ```text
 backend-test       后端测试
 frontend-build     前端类型检查和构建
-docker-build-push  main push 后构建并推送 GHCR 镜像
+docker-build-push  main push 后构建并推送阿里云 ACR 镜像
 deploy             main push 后 SSH 到服务器部署
 ```
 
 镜像命名规则：
 
 ```text
-ghcr.io/<github-owner>/nekocafe-backend:<commit-sha>
-ghcr.io/<github-owner>/nekocafe-backend:latest
-ghcr.io/<github-owner>/nekocafe-frontend:<commit-sha>
-ghcr.io/<github-owner>/nekocafe-frontend:latest
+<ACR_REGISTRY>/<ACR_NAMESPACE>/<ACR_BACKEND_REPOSITORY>:<commit-sha>
+<ACR_REGISTRY>/<ACR_NAMESPACE>/<ACR_BACKEND_REPOSITORY>:latest
+<ACR_REGISTRY>/<ACR_NAMESPACE>/<ACR_FRONTEND_REPOSITORY>:<commit-sha>
+<ACR_REGISTRY>/<ACR_NAMESPACE>/<ACR_FRONTEND_REPOSITORY>:latest
 ```
 
-部署时使用 commit SHA 镜像标签，便于定位和回滚；`latest` 仅作为人工查看和临时使用的便利标签。
+其中 `ACR_REGISTRY` 是阿里云 ACR 实例或地域公网地址，例如 `registry.cn-hangzhou.aliyuncs.com`；`ACR_NAMESPACE` 是 ACR 命名空间；`ACR_BACKEND_REPOSITORY` 和 `ACR_FRONTEND_REPOSITORY` 分别是已创建的后端、前端 ACR 仓库名。部署时使用 commit SHA 镜像标签，便于定位和回滚；`latest` 仅作为人工查看和临时使用的便利标签。
 
 服务器部署脚本核心命令：
 
 ```bash
 cd "$DEPLOY_PATH"
+echo "$ACR_PASSWORD" | docker login "$ACR_REGISTRY" --username "$ACR_USERNAME" --password-stdin >/dev/null
 docker compose pull
 docker compose up -d --remove-orphans
 docker image prune -f
@@ -342,15 +343,22 @@ SERVER_USER       SSH 用户名，例如 root
 SERVER_PORT       SSH 端口，默认 22
 SERVER_SSH_KEY    部署专用 SSH 私钥全文
 DEPLOY_PATH       部署目录，例如 /opt/nekocafe
+ACR_REGISTRY               阿里云 ACR 仓库地址，例如 registry.cn-hangzhou.aliyuncs.com
+ACR_NAMESPACE              阿里云 ACR 命名空间
+ACR_BACKEND_REPOSITORY     阿里云 ACR 后端镜像仓库名
+ACR_FRONTEND_REPOSITORY    阿里云 ACR 前端镜像仓库名
+ACR_USERNAME               阿里云 ACR 登录用户名
+ACR_PASSWORD               阿里云 ACR 登录密码或访问凭证
 ```
 
 注意事项：
 
 - 不要把 SSH 私钥提交到 Git 仓库。
-- 不要把数据库密码写到 README、代码注释或日志中。
+- 不要把 ACR 登录密码、数据库密码写到 README、代码注释或日志中。
 - 不要在 Actions 日志中打印密钥或 token。
 - 生产环境的 `JWT_SECRET`、数据库密码、AI API Key 应保存在服务器 `.env` 中。
-- 如果 GHCR 镜像保持私有，服务器需要提前执行 `docker login ghcr.io`；课程演示环境可将 GHCR package 设为 public，简化拉取。
+- GitHub Actions 会在构建阶段登录 ACR 并推送镜像，部署阶段会通过 SSH 在服务器上执行 `docker login` 后再拉取镜像。
+- 如果服务器拉取 ACR 镜像仍然较慢，可以在服务器手动执行 `docker pull <ACR_REGISTRY>/<ACR_NAMESPACE>/<ACR_BACKEND_REPOSITORY>:latest` 判断是网络问题还是认证问题。
 
 ## 9. main 分支保护建议
 
