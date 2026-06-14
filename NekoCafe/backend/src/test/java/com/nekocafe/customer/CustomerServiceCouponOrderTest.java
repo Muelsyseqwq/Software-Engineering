@@ -422,6 +422,9 @@ class CustomerServiceCouponOrderTest {
             ("PAID".equals(status) || "PREPARING".equals(status)), // canRefund
             "COMPLETED".equals(status),                   // canReview
             false,                 // reviewed
+            null,                  // reviewRating
+            null,                  // reviewContent
+            null,                  // reviewCreatedAt
             "CREATED".equals(status),                     // canCancel
             List.of()              // items
         );

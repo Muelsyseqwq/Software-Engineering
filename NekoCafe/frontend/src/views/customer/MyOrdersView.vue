@@ -27,6 +27,14 @@
             <p v-else>审核说明：{{ refundByOrderId.get(order.id)?.reviewRemark || '审核中，请等待门店处理' }}</p>
             <small v-if="refundByOrderId.get(order.id)?.reviewedAt">审核时间：{{ formatTime(refundByOrderId.get(order.id)?.reviewedAt) }}</small>
           </div>
+          <div v-if="order.reviewed" class="review-detail">
+            <div class="review-detail-header">
+              <strong>我的评价</strong>
+              <el-rate v-if="order.reviewRating" :model-value="order.reviewRating" disabled />
+            </div>
+            <p>{{ order.reviewContent || '未填写文字评价' }}</p>
+            <small v-if="order.reviewCreatedAt">评价时间：{{ formatTime(order.reviewCreatedAt) }}</small>
+          </div>
           <div class="neko-action-bar">
             <el-button v-if="order.canPay" type="primary" :loading="payingId === order.id" @click="pay(order)">继续支付</el-button>
             <el-button v-if="order.canCancel" type="info" plain :loading="cancellingId === order.id" @click="cancel(order)">取消订单</el-button>
@@ -97,6 +105,10 @@ onMounted(loadOrders)
 .refund-detail { display: grid; gap: 6px; margin-top: 14px; border-radius: 16px; padding: 12px 14px; background: rgba(248, 113, 113, 0.08); color: #7f1d1d; }
 .refund-detail p { margin: 0; color: #8a4b42; line-height: 1.6; }
 .refund-detail small { color: #9f665f; }
+.review-detail { display: grid; gap: 8px; margin-top: 14px; border-radius: 16px; padding: 12px 14px; background: rgba(34, 197, 94, 0.08); color: #166534; }
+.review-detail-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.review-detail p { margin: 0; color: #3f6d42; line-height: 1.6; }
+.review-detail small { color: #5c8a5f; }
 .dialog-input { margin-top: 18px; }
 @media (max-width: 700px) { .order-top { flex-direction: column; } .status-tags { justify-content: flex-start; } }
 </style>

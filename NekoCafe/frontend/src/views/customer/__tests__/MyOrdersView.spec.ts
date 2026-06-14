@@ -26,6 +26,14 @@ const { mockOrders } = vi.hoisted(() => ({
       items: [{ dishName: '三文鱼定食', quantity: 1 }],
       createdAt: '2026-06-12T10:00:00', completedAt: '2026-06-12T11:00:00',
     },
+    {
+      id: 4, orderNo: 'O004', storeId: 1, storeName: 'NekoCafe朝阳店',
+      totalAmount: 96, status: 'COMPLETED', refundStatus: 'NONE',
+      canPay: false, canRefund: false, canReview: false, canCancel: false, reviewed: true,
+      reviewRating: 4, reviewContent: '猫猫很亲人，拿铁很好喝', reviewCreatedAt: '2026-06-12T12:00:00',
+      items: [{ dishName: '猫咪拿铁', quantity: 2 }],
+      createdAt: '2026-06-12T09:00:00', completedAt: '2026-06-12T10:30:00',
+    },
   ],
 }))
 
@@ -87,6 +95,18 @@ describe('MyOrdersView', () => {
     await new Promise(r => setTimeout(r, 100))
     await wrapper.vm.$nextTick()
     expect(wrapper.text()).toContain('去评价')
+  })
+
+  it('shows submitted review details for already-reviewed orders', async () => {
+    const wrapper = mountOrders()
+    await new Promise(r => setTimeout(r, 100))
+    await wrapper.vm.$nextTick()
+    const reviewedOrder = wrapper.findAll('.order-card').find((card) => card.text().includes('O004'))
+    expect(reviewedOrder?.text()).toContain('已评价')
+    expect(reviewedOrder?.text()).toContain('我的评价')
+    expect(reviewedOrder?.text()).toContain('猫猫很亲人，拿铁很好喝')
+    expect(reviewedOrder?.text()).toContain('评价时间：2026-06-12 12:00')
+    expect(reviewedOrder?.text()).not.toContain('去评价')
   })
 
   it('shows empty state when no orders', async () => {

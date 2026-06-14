@@ -229,7 +229,8 @@ public class OrderService {
     }
 
     private OrderResponse toResponse(FoodOrder order, Store store, List<OrderItemResponse> items) {
-        boolean reviewed = hasReview(order.getUserId(), order.getId());
+        Review review = loadReview(order.getUserId(), order.getId());
+        boolean reviewed = review != null;
         String refundStatus = normalizeRefundStatus(order.getRefundStatus());
         DiningTable table = order.getTableId() == null ? null : diningTableMapper.selectById(order.getTableId());
         return new OrderResponse(
@@ -257,19 +258,24 @@ public class OrderService {
             (PAID.equals(order.getStatus()) || PREPARING.equals(order.getStatus())) && NONE.equals(refundStatus),
             COMPLETED.equals(order.getStatus()) && !reviewed,
             reviewed,
+            review == null ? null : review.getRating(),
+            review == null ? null : review.getContent(),
+            review == null ? null : review.getCreatedAt(),
             CREATED.equals(order.getStatus()),
             items
         );
     }
 
-    private boolean hasReview(Long userId, Long orderId) {
+    private Review loadReview(Long userId, Long orderId) {
         if (userId == null || orderId == null) {
-            return false;
+            return null;
         }
-        return reviewMapper.selectCount(new LambdaQueryWrapper<Review>()
+        return reviewMapper.selectOne(new LambdaQueryWrapper<Review>()
             .eq(Review::getUserId, userId)
             .eq(Review::getOrderId, orderId)
-            .eq(Review::getDeleted, 0)) > 0;
+            .eq(Review::getDeleted, 0)
+            .orderByDesc(Review::getCreatedAt)
+            .last("LIMIT 1"));
     }
 
     private WaitingQueueTicket loadQueueTicketForOrder(Long userId, CreateOrderRequest request) {
@@ -419,6 +425,9 @@ public class OrderService {
         boolean canRefund,
         boolean canReview,
         boolean reviewed,
+        Integer reviewRating,
+        String reviewContent,
+        LocalDateTime reviewCreatedAt,
         boolean canCancel,
         List<OrderItemResponse> items
     ) {
