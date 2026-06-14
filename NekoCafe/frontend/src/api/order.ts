@@ -52,6 +52,9 @@ export interface OrderResponse {
   canRefund?: boolean
   canReview?: boolean
   reviewed?: boolean
+  reviewRating?: number
+  reviewContent?: string
+  reviewCreatedAt?: string
   canCancel?: boolean
   items: OrderItemResponse[]
 }
