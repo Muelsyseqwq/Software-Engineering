@@ -10,6 +10,7 @@ import com.nekocafe.order.entity.FoodOrderItem;
 import com.nekocafe.order.mapper.FoodOrderItemMapper;
 import com.nekocafe.order.mapper.FoodOrderMapper;
 import com.nekocafe.order.service.OrderService;
+import com.nekocafe.queue.mapper.WaitingQueueTicketMapper;
 import com.nekocafe.reservation.entity.Reservation;
 import com.nekocafe.reservation.mapper.ReservationMapper;
 import com.nekocafe.store.entity.DiningTable;
@@ -37,11 +38,12 @@ class OrderServiceTest {
         StoreMapper storeMapper = mock(StoreMapper.class);
         DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
         ReservationMapper reservationMapper = mock(ReservationMapper.class);
+        WaitingQueueTicketMapper waitingQueueTicketMapper = mock(WaitingQueueTicketMapper.class);
         ReviewMapper reviewMapper = mock(ReviewMapper.class);
         RewardRedemptionService rewardRedemptionService = mock(RewardRedemptionService.class);
         OrderService orderService = new OrderService(
             orderMapper, orderItemMapper, dishMapper, storeMapper,
-            diningTableMapper, reservationMapper, reviewMapper, rewardRedemptionService);
+            diningTableMapper, reservationMapper, waitingQueueTicketMapper, reviewMapper, rewardRedemptionService);
 
         Store store = store(1L, "Test", "OPEN");
         Dish dish1 = dish(1L, 1L, new BigDecimal("25.00"), 10);
@@ -60,7 +62,7 @@ class OrderServiceTest {
         when(reviewMapper.selectCount(any())).thenReturn(0L);
 
         OrderService.CreateOrderRequest request = new OrderService.CreateOrderRequest(
-            1L, null,
+            1L, null, null,
             List.of(
                 new OrderService.CreateOrderItemRequest(1L, 1),
                 new OrderService.CreateOrderItemRequest(2L, 1)
@@ -81,11 +83,12 @@ class OrderServiceTest {
         StoreMapper storeMapper = mock(StoreMapper.class);
         DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
         ReservationMapper reservationMapper = mock(ReservationMapper.class);
+        WaitingQueueTicketMapper waitingQueueTicketMapper = mock(WaitingQueueTicketMapper.class);
         ReviewMapper reviewMapper = mock(ReviewMapper.class);
         RewardRedemptionService rewardRedemptionService = mock(RewardRedemptionService.class);
         OrderService orderService = new OrderService(
             orderMapper, orderItemMapper, dishMapper, storeMapper,
-            diningTableMapper, reservationMapper, reviewMapper, rewardRedemptionService);
+            diningTableMapper, reservationMapper, waitingQueueTicketMapper, reviewMapper, rewardRedemptionService);
 
         Store store = store(1L, "Test", "OPEN");
         Dish dish1 = dish(1L, 1L, new BigDecimal("25.00"), 10);
@@ -95,7 +98,7 @@ class OrderServiceTest {
         when(dishMapper.selectBatchIds(any())).thenReturn(List.of(dish1, dish2));
 
         OrderService.CreateOrderRequest request = new OrderService.CreateOrderRequest(
-            1L, null,
+            1L, null, null,
             List.of(
                 new OrderService.CreateOrderItemRequest(1L, 1),
                 new OrderService.CreateOrderItemRequest(2L, 2)
@@ -115,11 +118,12 @@ class OrderServiceTest {
         StoreMapper storeMapper = mock(StoreMapper.class);
         DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
         ReservationMapper reservationMapper = mock(ReservationMapper.class);
+        WaitingQueueTicketMapper waitingQueueTicketMapper = mock(WaitingQueueTicketMapper.class);
         ReviewMapper reviewMapper = mock(ReviewMapper.class);
         RewardRedemptionService rewardRedemptionService = mock(RewardRedemptionService.class);
         OrderService orderService = new OrderService(
             orderMapper, orderItemMapper, dishMapper, storeMapper,
-            diningTableMapper, reservationMapper, reviewMapper, rewardRedemptionService);
+            diningTableMapper, reservationMapper, waitingQueueTicketMapper, reviewMapper, rewardRedemptionService);
 
         Store store = store(1L, "Test", "OPEN");
         Dish dish1 = dish(1L, 1L, new BigDecimal("25.00"), 10);
@@ -140,7 +144,7 @@ class OrderServiceTest {
         when(reviewMapper.selectCount(any())).thenReturn(0L);
 
         OrderService.CreateOrderRequest request = new OrderService.CreateOrderRequest(
-            1L, null,
+            1L, null, null,
             List.of(
                 new OrderService.CreateOrderItemRequest(1L, 1),
                 new OrderService.CreateOrderItemRequest(2L, 1)
@@ -162,11 +166,12 @@ class OrderServiceTest {
         StoreMapper storeMapper = mock(StoreMapper.class);
         DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
         ReservationMapper reservationMapper = mock(ReservationMapper.class);
+        WaitingQueueTicketMapper waitingQueueTicketMapper = mock(WaitingQueueTicketMapper.class);
         ReviewMapper reviewMapper = mock(ReviewMapper.class);
         RewardRedemptionService rewardRedemptionService = mock(RewardRedemptionService.class);
         OrderService orderService = new OrderService(
             orderMapper, orderItemMapper, dishMapper, storeMapper,
-            diningTableMapper, reservationMapper, reviewMapper, rewardRedemptionService);
+            diningTableMapper, reservationMapper, waitingQueueTicketMapper, reviewMapper, rewardRedemptionService);
 
         FoodOrder order = foodOrder(1L, 1L, 1L, "CREATED");
         Store store = store(1L, "Test", "OPEN");
@@ -192,11 +197,12 @@ class OrderServiceTest {
         StoreMapper storeMapper = mock(StoreMapper.class);
         DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
         ReservationMapper reservationMapper = mock(ReservationMapper.class);
+        WaitingQueueTicketMapper waitingQueueTicketMapper = mock(WaitingQueueTicketMapper.class);
         ReviewMapper reviewMapper = mock(ReviewMapper.class);
         RewardRedemptionService rewardRedemptionService = mock(RewardRedemptionService.class);
         OrderService orderService = new OrderService(
             orderMapper, orderItemMapper, dishMapper, storeMapper,
-            diningTableMapper, reservationMapper, reviewMapper, rewardRedemptionService);
+            diningTableMapper, reservationMapper, waitingQueueTicketMapper, reviewMapper, rewardRedemptionService);
 
         FoodOrder order = foodOrder(1L, 1L, 1L, "PAID");
 
@@ -215,11 +221,12 @@ class OrderServiceTest {
         StoreMapper storeMapper = mock(StoreMapper.class);
         DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
         ReservationMapper reservationMapper = mock(ReservationMapper.class);
+        WaitingQueueTicketMapper waitingQueueTicketMapper = mock(WaitingQueueTicketMapper.class);
         ReviewMapper reviewMapper = mock(ReviewMapper.class);
         RewardRedemptionService rewardRedemptionService = mock(RewardRedemptionService.class);
         OrderService orderService = new OrderService(
             orderMapper, orderItemMapper, dishMapper, storeMapper,
-            diningTableMapper, reservationMapper, reviewMapper, rewardRedemptionService);
+            diningTableMapper, reservationMapper, waitingQueueTicketMapper, reviewMapper, rewardRedemptionService);
 
         Store store = store(1L, "Test", "OPEN");
         Dish dish = dish(1L, 1L, new BigDecimal("25.00"), 10);
@@ -232,7 +239,7 @@ class OrderServiceTest {
         when(orderMapper.selectCount(any())).thenReturn(1L);
 
         OrderService.CreateOrderRequest request = new OrderService.CreateOrderRequest(
-            1L, 1L, List.of(new OrderService.CreateOrderItemRequest(1L, 1)),
+            1L, 1L, null, List.of(new OrderService.CreateOrderItemRequest(1L, 1)),
             null, null);
 
         assertThatThrownBy(() -> orderService.create(1L, request))

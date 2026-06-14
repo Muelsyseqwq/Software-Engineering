@@ -45,7 +45,8 @@
           <strong>{{ queueStatus.calledTicket.contactName }} · {{ queueStatus.calledTicket.partySize }} 人</strong>
           <p>{{ queueStatus.calledTicket.contactPhone }}</p>
           <small>叫号时间：{{ formatTime(queueStatus.calledTicket.calledAt) }}</small>
-          <el-button type="success" :loading="submitting" @click="seatCalledTicket">确认入座</el-button>
+          <small v-if="queueStatus.calledTicket.tableNo">入座桌位：{{ queueStatus.calledTicket.area || '座位区' }} · {{ queueStatus.calledTicket.tableNo }}</small>
+          <el-button type="success" :loading="submitting" @click="openSeatDialog">确认入座</el-button>
         </template>
         <el-empty v-else description="暂无已叫号顾客" />
       </article>
@@ -62,11 +63,33 @@
             <el-tag :type="ticketTagType(row.status)">{{ ticketStatusText(row.status) }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="入座桌位" min-width="130">
+          <template #default="{ row }">{{ row.tableNo ? `${row.area || '座位区'} · ${row.tableNo}` : '-' }}</template>
+        </el-table-column>
         <el-table-column label="取号时间" min-width="160">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
       </el-table>
     </div>
+    <el-dialog v-model="seatDialogVisible" title="选择入座桌位" width="420px" :close-on-click-modal="false">
+      <el-form label-position="top">
+        <el-form-item label="空闲桌位">
+          <el-select v-model="seatForm.tableId" placeholder="请选择桌位" style="width: 100%" filterable>
+            <el-option
+              v-for="table in availableSeatTables"
+              :key="table.id"
+              :label="`${table.area || '座位区'} · ${table.tableNo}（${table.capacity}人）`"
+              :value="table.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <el-empty v-if="!availableSeatTables.length" description="暂无满足人数的空闲桌位" />
+      <template #footer>
+        <el-button @click="seatDialogVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!seatForm.tableId" :loading="submitting" @click="seatCalledTicket">确认入座</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -74,7 +97,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
-import { callNextQueueNumber, fetchStaffQueueStatus, markQueueTicketSeated, resetQueue, type StaffQueueStatus } from '@/api/staff'
+import { callNextQueueNumber, fetchStaffQueueStatus, fetchTables, markQueueTicketSeated, resetQueue, type DiningTable, type StaffQueueStatus } from '@/api/staff'
 import type { AuthAssignedStore } from '@/types/auth'
 
 const auth = useAuthStore()
@@ -82,7 +105,15 @@ const selectedStoreId = ref<number>()
 const queueStatus = ref<StaffQueueStatus>()
 const loading = ref(false)
 const submitting = ref(false)
+const seatDialogVisible = ref(false)
+const seatTables = ref<DiningTable[]>([])
+const seatForm = ref<{ tableId?: number }>({})
 let timer: number | undefined
+
+const availableSeatTables = computed(() => {
+  const partySize = queueStatus.value?.calledTicket?.partySize || 1
+  return seatTables.value.filter((table) => table.storeId === selectedStoreId.value && table.status === 'AVAILABLE' && table.capacity >= partySize)
+})
 
 const assignedStores = computed<AuthAssignedStore[]>(() => {
   const stores = auth.user?.stores?.filter((store) => store.id) || []
@@ -135,13 +166,29 @@ async function callNext() {
   }
 }
 
-async function seatCalledTicket() {
+async function openSeatDialog() {
   const ticket = queueStatus.value?.calledTicket
-  if (!ticket) return
+  if (!ticket || !selectedStoreId.value) return
+  seatForm.value = {}
   submitting.value = true
   try {
-    await markQueueTicketSeated(ticket.id)
-    ElMessage.success('已确认顾客入座')
+    seatTables.value = await fetchTables('AVAILABLE')
+    seatDialogVisible.value = true
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '桌位加载失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function seatCalledTicket() {
+  const ticket = queueStatus.value?.calledTicket
+  if (!ticket || !seatForm.value.tableId) return
+  submitting.value = true
+  try {
+    const seated = await markQueueTicketSeated(ticket.id, { tableId: seatForm.value.tableId })
+    ElMessage.success(`已确认顾客入座：${seated.tableNo || '已分配桌位'}`)
+    seatDialogVisible.value = false
     await loadStatus()
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '确认入座失败')

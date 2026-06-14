@@ -447,8 +447,8 @@ public class StoreManagerService {
         if (order == null) {
             throw new BizException(2231, "订单不存在或不属于当前门店");
         }
-        if (!PAID.equals(order.getStatus()) || !APPLIED.equals(order.getRefundStatus())) {
-            throw new BizException(2235, "只有已支付且已申请退款的订单可以处理退款");
+        if (!APPLIED.equals(order.getRefundStatus())) {
+            throw new BizException(2235, "只有已申请退款的订单可以处理退款");
         }
 
         RefundRequest refund = refundRequestMapper.selectOne(new LambdaQueryWrapper<RefundRequest>()

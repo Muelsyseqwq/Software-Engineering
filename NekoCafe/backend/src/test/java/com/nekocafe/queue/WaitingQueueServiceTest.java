@@ -9,9 +9,11 @@ import com.nekocafe.queue.mapper.WaitingQueueCounterMapper;
 import com.nekocafe.queue.mapper.WaitingQueueTicketMapper;
 import com.nekocafe.queue.service.WaitingQueueService;
 import com.nekocafe.store.entity.DiningTable;
+import com.nekocafe.store.entity.DiningTableStatusLog;
 import com.nekocafe.store.entity.Store;
 import com.nekocafe.store.entity.UserStoreRole;
 import com.nekocafe.store.mapper.DiningTableMapper;
+import com.nekocafe.store.mapper.DiningTableStatusLogMapper;
 import com.nekocafe.store.mapper.StoreMapper;
 import com.nekocafe.store.mapper.UserStoreRoleMapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -35,9 +37,10 @@ class WaitingQueueServiceTest {
     private final WaitingQueueTicketMapper ticketMapper = mock(WaitingQueueTicketMapper.class);
     private final StoreMapper storeMapper = mock(StoreMapper.class);
     private final DiningTableMapper diningTableMapper = mock(DiningTableMapper.class);
+    private final DiningTableStatusLogMapper diningTableStatusLogMapper = mock(DiningTableStatusLogMapper.class);
     private final UserStoreRoleMapper userStoreRoleMapper = mock(UserStoreRoleMapper.class);
     private final WaitingQueueService service = new WaitingQueueService(
-        counterMapper, ticketMapper, storeMapper, diningTableMapper, userStoreRoleMapper);
+        counterMapper, ticketMapper, storeMapper, diningTableMapper, diningTableStatusLogMapper, userStoreRoleMapper);
 
     /**
      * Pure-Mockito unit tests run without a Spring context, so MyBatis-Plus does not
@@ -157,13 +160,19 @@ class WaitingQueueServiceTest {
         WaitingQueueTicket ticket = ticket(1L, 1L, 1L, 3, "CALLED");
         when(ticketMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(ticket);
         when(userStoreRoleMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
+        DiningTable table = table(1L, 1L, "A1", 4, "AVAILABLE");
+        when(diningTableMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(table);
+        when(diningTableMapper.selectById(1L)).thenReturn(table);
+        when(diningTableMapper.updateById(any(DiningTable.class))).thenReturn(1);
         when(ticketMapper.updateById(any(WaitingQueueTicket.class))).thenReturn(1);
+        when(diningTableStatusLogMapper.insert(any(DiningTableStatusLog.class))).thenReturn(1);
 
         // When
-        WaitingQueueService.QueueTicketResponse resp = service.markSeated(1L, 1L);
+        WaitingQueueService.QueueTicketResponse resp = service.markSeated(1L, 1L, new WaitingQueueService.MarkSeatedRequest(1L));
 
         // Then: status transitions to SEATED
         assertThat(resp.status()).isEqualTo("SEATED");
+        assertThat(resp.tableNo()).isEqualTo("A1");
     }
 
     // ---- cancel ----
@@ -206,6 +215,18 @@ class WaitingQueueServiceTest {
         c.setResetVersion(resetVersion);
         c.setDeleted(0);
         return c;
+    }
+
+    private static DiningTable table(Long id, Long storeId, String tableNo, Integer capacity, String status) {
+        DiningTable table = new DiningTable();
+        table.setId(id);
+        table.setStoreId(storeId);
+        table.setTableNo(tableNo);
+        table.setCapacity(capacity);
+        table.setArea("大厅");
+        table.setStatus(status);
+        table.setDeleted(0);
+        return table;
     }
 
     private static WaitingQueueTicket ticket(Long id, Long storeId, Long userId,

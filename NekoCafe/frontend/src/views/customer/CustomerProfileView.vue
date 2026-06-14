@@ -48,6 +48,23 @@
       </div>
     </section>
 
+    <section class="section-card coupons-card" v-loading="loading">
+      <div class="section-heading">
+        <div><p class="eyebrow">MY COUPONS</p><h2>我的优惠券</h2><span>这里展示当前账号已领取、可在结算时使用的优惠券。</span></div>
+      </div>
+      <el-empty v-if="!usableCoupons.length" description="暂无可用优惠券，去兑换柜台或活动页领取吧" />
+      <div v-else class="coupon-grid">
+        <article v-for="coupon in usableCoupons" :key="coupon.id" class="coupon-card">
+          <div class="coupon-icon">🎫</div>
+          <div>
+            <div class="coupon-title"><h3>{{ coupon.rewardName }}</h3><el-tag type="success">可使用</el-tag></div>
+            <p>兑换号：{{ coupon.redemptionNo }}</p>
+            <small>领取时间：{{ formatTime(coupon.redeemedAt) }} · 结算时可下拉选择使用</small>
+          </div>
+        </article>
+      </div>
+    </section>
+
     <section class="section-card transactions-card">
       <div class="section-heading"><div><p class="eyebrow">REDEMPTIONS</p><h2>最近兑换记录</h2></div></div>
       <el-table :data="redemptions" empty-text="暂无兑换记录">
@@ -73,7 +90,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   fetchCustomerPoints,
@@ -113,6 +130,7 @@ function levelRank(level?: string | null) {
   if (normalized === 'VIP') return 2
   return 1
 }
+const usableCoupons = computed(() => redemptions.value.filter((coupon) => coupon.status === 'REDEEMED' && !coupon.usedAt && !coupon.orderId))
 function canRedeemByLevel(requiredLevel?: string | null) { return levelRank(points.value?.levelCode) >= levelRank(requiredLevel) }
 function levelLabel(level?: string | null) {
   const normalized = normalizeLevel(level)
@@ -126,7 +144,10 @@ function redeemButtonText(reward: RewardCatalogResponse) {
   if ((points.value?.points ?? 0) < reward.pointsCost) return '积分不足'
   return '立即兑换'
 }
-function redemptionStatusText(status: string) { return status === 'REDEEMED' ? '已兑换' : status }
+function redemptionStatusText(status: string) {
+  const map: Record<string, string> = { REDEEMED: '已兑换', LOCKED: '已绑定订单', USED: '已使用', EXPIRED: '已过期' }
+  return map[status] || status
+}
 async function loadData() {
   loading.value = true
   try {
@@ -173,13 +194,16 @@ onMounted(loadData)
 .member-card span { margin-top: 12px; opacity: 0.78; }
 .preference-group { margin-top: 18px; }
 .preference-group h3 { margin: 0 0 12px; color: #3b2618; }
-.rewards-card, .transactions-card { margin-top: 22px; }
-.reward-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
-.reward-card { display: grid; grid-template-columns: 72px 1fr; overflow: hidden; border: 1px solid #f5dfc5; border-radius: 22px; background: linear-gradient(135deg, #fffaf4, #fff); box-shadow: 0 16px 34px rgba(146, 64, 14, 0.08); }
-.ticket-stub { display: grid; place-items: center; background: repeating-linear-gradient(180deg, #fde8c8, #fde8c8 12px, #fff2dc 12px, #fff2dc 24px); font-size: 34px; }
+.rewards-card, .transactions-card, .coupons-card { margin-top: 22px; }
+.reward-grid, .coupon-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.reward-card, .coupon-card { display: grid; grid-template-columns: 72px 1fr; overflow: hidden; border: 1px solid #f5dfc5; border-radius: 22px; background: linear-gradient(135deg, #fffaf4, #fff); box-shadow: 0 16px 34px rgba(146, 64, 14, 0.08); }
+.coupon-card { padding: 16px; align-items: center; border-color: #bbf7d0; background: linear-gradient(135deg, #f0fdf4, #fff); }
+.ticket-stub, .coupon-icon { display: grid; place-items: center; background: repeating-linear-gradient(180deg, #fde8c8, #fde8c8 12px, #fff2dc 12px, #fff2dc 24px); font-size: 34px; }
+.coupon-icon { width: 56px; height: 56px; border-radius: 16px; background: #dcfce7; }
 .reward-body { padding: 18px; display: grid; gap: 12px; }
-.reward-title { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-.reward-title h3 { margin: 0; color: #3b2618; }
+.reward-title, .coupon-title { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.reward-title h3, .coupon-title h3 { margin: 0; color: #3b2618; }
+.coupon-card p, .coupon-card small { margin: 4px 0 0; color: rgba(59,38,24,0.62); }
 .reward-body p { margin: 0; color: rgba(59,38,24,0.62); line-height: 1.7; }
 .reward-meta { display: flex; justify-content: space-between; gap: 10px; color: #8a6a52; font-weight: 800; }
 .reward-meta strong { color: #d97706; }

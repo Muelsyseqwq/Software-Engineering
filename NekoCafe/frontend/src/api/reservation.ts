@@ -64,6 +64,9 @@ export interface QueueTicket {
   queueDate: string
   queueNumber: number
   partySize: number
+  tableId?: number
+  tableNo?: string
+  area?: string
   status: string
   contactName: string
   contactPhone: string

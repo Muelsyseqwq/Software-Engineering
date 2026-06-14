@@ -22,11 +22,20 @@
                 <el-tag :type="getOrderStatusTagType(row.status)">{{ row.status }}</el-tag>
               </template>
             </el-table-column>
+            <el-table-column label="退款" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="row.refundStatus === 'APPLIED'" type="danger">退款申请中</el-tag>
+                <span v-else class="muted">无</span>
+              </template>
+            </el-table-column>
             <el-table-column prop="createdAt" label="创建时间" min-width="150" />
             <el-table-column label="操作" width="150">
               <template #default="{ row }">
-                <el-button v-if="row.status === '待支付' || row.status === '已支付/待制作'" size="small" @click="handleStart(row.id)">开始制作</el-button>
-                <el-button v-if="row.status === '制作中'" type="success" size="small" @click="handleComplete(row.id)">完成</el-button>
+                <span v-if="row.refundStatus === 'APPLIED'" class="muted">等待店长处理退款</span>
+                <template v-else>
+                  <el-button v-if="row.status === '待支付' || row.status === '已支付/待制作'" size="small" @click="handleStart(row.id)">开始制作</el-button>
+                  <el-button v-if="row.status === '制作中'" type="success" size="small" @click="handleComplete(row.id)">完成</el-button>
+                </template>
               </template>
             </el-table-column>
           </el-table>
@@ -43,6 +52,12 @@
             <el-table-column prop="status" label="状态" width="120">
               <template #default="{ row }">
                 <el-tag :type="getOrderStatusTagType(row.status)">{{ row.status }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="退款" width="120">
+              <template #default="{ row }">
+                <el-tag v-if="row.refundStatus === 'APPLIED'" type="danger">退款申请中</el-tag>
+                <span v-else class="muted">无</span>
               </template>
             </el-table-column>
             <el-table-column prop="createdAt" label="创建时间" min-width="150" />
@@ -195,4 +210,5 @@ onMounted(() => {
 .eyebrow { margin: 0 0 8px; color: #d97706; font-weight: 800; letter-spacing: 0.08em; }
 .order-tabs { min-width: 0; }
 .table-wrap { overflow-x: auto; }
+.muted { color: #8a6a52; font-size: 12px; }
 </style>

@@ -60,6 +60,12 @@
           <small>{{ selectedReservation.slotDate }} {{ formatShortTime(selectedReservation.startTime) }}-{{ formatShortTime(selectedReservation.endTime) }}</small>
         </div>
 
+        <div v-if="selectedQueueTicket" class="reservation-card queue-order-card">
+          <span>排队入座点餐</span>
+          <strong>{{ selectedQueueTicket.area || '座位区' }} · {{ selectedQueueTicket.tableNo || '已分配桌位' }}</strong>
+          <small>{{ selectedQueueTicket.queueDate }} · {{ selectedQueueTicket.queueNumber }} 号 · {{ selectedQueueTicket.partySize }} 人</small>
+        </div>
+
         <div v-if="selectedItems.length" class="summary-list">
           <div v-for="item in selectedItems" :key="item.dish.id" class="summary-item">
             <span>{{ item.dish.name }} × {{ item.quantity }}</span>
@@ -153,7 +159,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchStoreMenu, type DishItem, type MenuCategory } from '@/api/menu'
 import { fetchStores, type StoreSummary } from '@/api/store'
-import { fetchMyReservations, type ReservationRow } from '@/api/reservation'
+import { fetchMyReservations, fetchQueueStatus, type QueueTicket, type ReservationRow } from '@/api/reservation'
 import { fetchMyRedemptions, type RewardRedemptionResponse } from '@/api/customer'
 import { createOrder, fetchMyOrders, type OrderResponse } from '@/api/order'
 import { sandboxPay, type PaymentResponse } from '@/api/payment'
@@ -174,6 +180,7 @@ const orders = ref<OrderResponse[]>([])
 const redemptions = ref<RewardRedemptionResponse[]>([])
 const selectedRedemptionId = ref<number>()
 const selectedReservation = ref<ReservationRow>()
+const selectedQueueTicket = ref<QueueTicket>()
 
 const selectedItems = computed(() => categories.value
   .flatMap((category) => category.dishes)
@@ -194,6 +201,9 @@ async function loadStores() {
 async function handleStoreChange() {
   if (selectedReservation.value?.storeId !== selectedStoreId.value) {
     selectedReservation.value = undefined
+  }
+  if (selectedQueueTicket.value?.storeId !== selectedStoreId.value) {
+    selectedQueueTicket.value = undefined
   }
   currentOrder.value = undefined
   payment.value = undefined
@@ -225,6 +235,20 @@ async function loadRedemptions() {
   }
 }
 
+async function loadSelectedQueueTicket() {
+  const queueTicketId = Number(route.query.queueTicketId)
+  const storeId = Number(route.query.storeId)
+  if (!queueTicketId || !storeId) return
+  const queueStatus = await fetchQueueStatus(storeId)
+  const ticket = queueStatus.myTicket
+  if (!ticket || ticket.id !== queueTicketId || ticket.status !== 'SEATED') {
+    ElMessage.warning('未找到可用于点餐的排队入座记录，将按普通点单创建订单')
+    return
+  }
+  selectedQueueTicket.value = ticket
+  selectedStoreId.value = ticket.storeId
+}
+
 async function loadSelectedReservation() {
   const reservationId = Number(route.query.reservationId)
   if (!reservationId) return
@@ -246,6 +270,7 @@ async function submitOrder() {
     currentOrder.value = await createOrder({
       storeId: selectedStoreId.value,
       reservationId: selectedReservation.value?.id,
+      queueTicketId: selectedQueueTicket.value?.id,
       items: selectedItems.value.map((item: { dish: DishItem; quantity: number }) => ({ dishId: item.dish.id, quantity: item.quantity })),
       remark: remark.value,
       rewardRedemptionId: selectedRedemptionId.value,
@@ -325,6 +350,7 @@ onMounted(async () => {
   try {
     await loadStores()
     await loadSelectedReservation()
+    await loadSelectedQueueTicket()
     await loadMenu()
     await loadOrders()
     await loadRedemptions()
@@ -338,6 +364,7 @@ onMounted(async () => {
 .checkout-page { display: grid; gap: 22px; }
 .store-select { width: 300px; }
 .checkout-grid { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 20px; align-items: start; }
+.queue-order-card { border-color: #bbf7d0; background: #f0fdf4; }
 .section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
 .section-heading h2 { margin: 0; color: #3b2618; }
 .menu-picker { min-height: 420px; }

@@ -8,9 +8,11 @@ import com.nekocafe.queue.entity.WaitingQueueTicket;
 import com.nekocafe.queue.mapper.WaitingQueueCounterMapper;
 import com.nekocafe.queue.mapper.WaitingQueueTicketMapper;
 import com.nekocafe.store.entity.DiningTable;
+import com.nekocafe.store.entity.DiningTableStatusLog;
 import com.nekocafe.store.entity.Store;
 import com.nekocafe.store.entity.UserStoreRole;
 import com.nekocafe.store.mapper.DiningTableMapper;
+import com.nekocafe.store.mapper.DiningTableStatusLogMapper;
 import com.nekocafe.store.mapper.StoreMapper;
 import com.nekocafe.store.mapper.UserStoreRoleMapper;
 import org.springframework.stereotype.Service;
@@ -25,6 +27,7 @@ public class WaitingQueueService {
 
     private static final String OPEN = "OPEN";
     private static final String AVAILABLE = "AVAILABLE";
+    private static final String OCCUPIED = "OCCUPIED";
     private static final String STAFF = "STAFF";
     private static final String ACTIVE = "ACTIVE";
 
@@ -38,17 +41,20 @@ public class WaitingQueueService {
     private final WaitingQueueTicketMapper ticketMapper;
     private final StoreMapper storeMapper;
     private final DiningTableMapper diningTableMapper;
+    private final DiningTableStatusLogMapper diningTableStatusLogMapper;
     private final UserStoreRoleMapper userStoreRoleMapper;
 
     public WaitingQueueService(WaitingQueueCounterMapper counterMapper,
                                WaitingQueueTicketMapper ticketMapper,
                                StoreMapper storeMapper,
                                DiningTableMapper diningTableMapper,
+                               DiningTableStatusLogMapper diningTableStatusLogMapper,
                                UserStoreRoleMapper userStoreRoleMapper) {
         this.counterMapper = counterMapper;
         this.ticketMapper = ticketMapper;
         this.storeMapper = storeMapper;
         this.diningTableMapper = diningTableMapper;
+        this.diningTableStatusLogMapper = diningTableStatusLogMapper;
         this.userStoreRoleMapper = userStoreRoleMapper;
     }
 
@@ -175,15 +181,30 @@ public class WaitingQueueService {
     }
 
     @Transactional
-    public QueueTicketResponse markSeated(Long staffId, Long ticketId) {
+    public QueueTicketResponse markSeated(Long staffId, Long ticketId, MarkSeatedRequest request) {
         WaitingQueueTicket ticket = loadTicket(ticketId);
         ensureStaffCanOperateStore(staffId, ticket.getStoreId());
         if (!CALLED.equals(ticket.getStatus())) {
             throw new BizException(6107, "只有已叫号的顾客可以确认入座");
         }
+        DiningTable table = validateSeatTable(ticket, request == null ? null : request.tableId());
+        ticket.setTableId(table.getId());
         ticket.setStatus(SEATED);
         ticket.setSeatedAt(LocalDateTime.now());
         ticketMapper.updateById(ticket);
+
+        String oldStatus = table.getStatus();
+        table.setStatus(OCCUPIED);
+        diningTableMapper.updateById(table);
+
+        DiningTableStatusLog log = new DiningTableStatusLog();
+        log.setTableId(table.getId());
+        log.setStoreId(table.getStoreId());
+        log.setOldStatus(oldStatus);
+        log.setNewStatus(OCCUPIED);
+        log.setChangedBy(staffId);
+        log.setReason("排队叫号，顾客入座");
+        diningTableStatusLogMapper.insert(log);
         return toTicketResponse(ticket);
     }
 
@@ -290,7 +311,7 @@ public class WaitingQueueService {
             .eq(WaitingQueueTicket::getQueueDate, date)
             .eq(WaitingQueueTicket::getResetVersion, resetVersion)
             .eq(WaitingQueueTicket::getDeleted, 0)
-            .in(WaitingQueueTicket::getStatus, List.of(CALLED, WAITING))
+            .in(WaitingQueueTicket::getStatus, List.of(CALLED, WAITING, SEATED))
             .orderByAsc(WaitingQueueTicket::getQueueNumber)
             .orderByAsc(WaitingQueueTicket::getId));
     }
@@ -335,6 +356,27 @@ public class WaitingQueueService {
             throw new BizException(6102, "门店不存在");
         }
         return store;
+    }
+
+    private DiningTable validateSeatTable(WaitingQueueTicket ticket, Long tableId) {
+        if (tableId == null) {
+            throw new BizException(6110, "请选择入座桌位");
+        }
+        DiningTable table = diningTableMapper.selectOne(new LambdaQueryWrapper<DiningTable>()
+            .eq(DiningTable::getId, tableId)
+            .eq(DiningTable::getStoreId, ticket.getStoreId())
+            .eq(DiningTable::getDeleted, 0)
+            .last("LIMIT 1"));
+        if (table == null) {
+            throw new BizException(6110, "桌位不存在或不属于当前门店");
+        }
+        if (!AVAILABLE.equals(table.getStatus())) {
+            throw new BizException(6111, "请选择空闲桌位入座");
+        }
+        if (table.getCapacity() != null && ticket.getPartySize() != null && table.getCapacity() < ticket.getPartySize()) {
+            throw new BizException(6112, "所选桌位容量不足");
+        }
+        return table;
     }
 
     private boolean hasSuitableAvailableTable(Long storeId, Integer partySize) {
@@ -393,6 +435,9 @@ public class WaitingQueueService {
             ticket.getQueueDate(),
             ticket.getQueueNumber(),
             ticket.getPartySize(),
+            ticket.getTableId(),
+            tableNo(ticket.getTableId()),
+            tableArea(ticket.getTableId()),
             ticket.getStatus(),
             ticket.getContactName(),
             ticket.getContactPhone(),
@@ -409,6 +454,9 @@ public class WaitingQueueService {
             ticket.getId(),
             ticket.getQueueNumber(),
             ticket.getPartySize(),
+            ticket.getTableId(),
+            tableNo(ticket.getTableId()),
+            tableArea(ticket.getTableId()),
             ticket.getStatus(),
             ticket.getContactName(),
             ticket.getContactPhone(),
@@ -417,6 +465,16 @@ public class WaitingQueueService {
             ticket.getExpiredAt(),
             ticket.getCreatedAt()
         );
+    }
+
+    private String tableNo(Long tableId) {
+        DiningTable table = tableId == null ? null : diningTableMapper.selectById(tableId);
+        return table == null ? null : table.getTableNo();
+    }
+
+    private String tableArea(Long tableId) {
+        DiningTable table = tableId == null ? null : diningTableMapper.selectById(tableId);
+        return table == null ? null : table.getArea();
     }
 
     public record ApplyQueueRequest(Long storeId, Integer partySize, String contactName, String contactPhone) {
@@ -428,6 +486,9 @@ public class WaitingQueueService {
         LocalDate queueDate,
         Integer queueNumber,
         Integer partySize,
+        Long tableId,
+        String tableNo,
+        String area,
         String status,
         String contactName,
         String contactPhone,
@@ -450,10 +511,16 @@ public class WaitingQueueService {
     ) {
     }
 
+    public record MarkSeatedRequest(Long tableId) {
+    }
+
     public record StaffQueueTicketResponse(
         Long id,
         Integer queueNumber,
         Integer partySize,
+        Long tableId,
+        String tableNo,
+        String area,
         String status,
         String contactName,
         String contactPhone,
